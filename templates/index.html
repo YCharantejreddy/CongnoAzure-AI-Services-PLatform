@@ -1,0 +1,537 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Azure AI Mega Toolkit{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <h1 class="text-3xl font-bold text-blue-600 mb-6">Azure AI Text & Content Processing</h1>
+    
+    <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+        <form id="textProcessingForm" class="space-y-6">
+            <div class="mb-4">
+                <label class="block text-gray-700 font-semibold mb-2">Input Type</label>
+                <div class="flex flex-wrap gap-x-6 gap-y-3">
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="inputType" value="text" class="form-radio text-blue-600 h-5 w-5" checked>
+                        <span class="ml-2">Direct Text</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="inputType" value="pdf" class="form-radio text-blue-600 h-5 w-5">
+                        <span class="ml-2">PDF File</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="inputType" value="youtube" class="form-radio text-blue-600 h-5 w-5">
+                        <span class="ml-2">YouTube URL</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="inputType" value="audio_file" class="form-radio text-blue-600 h-5 w-5">
+                        <span class="ml-2">Audio File</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div id="textInputSection" class="input-section">
+                <label for="textContent" class="block text-gray-700 font-semibold mb-2">Text Content</label>
+                <textarea id="textContent" name="textContent" rows="6" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter text to process..."></textarea>
+            </div>
+            
+            <div id="pdfInputSection" class="input-section hidden">
+                <label for="pdfFile" class="block text-gray-700 font-semibold mb-2">PDF File</label>
+                <input type="file" id="pdfFile" name="pdfFileClient" accept=".pdf" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                <p class="text-xs text-gray-500 mt-1">Note: For actions like Translate, Sentiment, or Summarize with PDF, the server will attempt to extract text. If extraction fails, the operation may not succeed or may process empty text.</p>
+            </div>
+            
+            <div id="youtubeInputSection" class="input-section hidden">
+                <label for="youtubeUrl" class="block text-gray-700 font-semibold mb-2">YouTube URL</label>
+                <input type="url" id="youtubeUrl" name="youtubeUrl" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., https://www.youtube.com/watch?v=7onC2-SoHbc">
+            </div>
+            
+            <div id="audioFileInputSection" class="input-section hidden">
+                <label for="audioFile" class="block text-gray-700 font-semibold mb-2">Audio File</label>
+                <input type="file" id="audioFile" name="audioFileClient" accept="audio/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                <div class="mt-2">
+                    <label for="transcriptionLanguage" class="block text-gray-700 text-sm font-medium mb-1">Transcription Language (optional)</label>
+                    <select id="transcriptionLanguage" name="language" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                        <option value="">Auto-detect (if supported by service)</option>
+                        <option value="en-US">English (US)</option>
+                        <option value="es-ES">Spanish (Spain)</option>
+                        <option value="fr-FR">French (France)</option>
+                        <option value="de-DE">German (Germany)</option>
+                        <option value="it-IT">Italian (Italy)</option>
+                        <option value="pt-BR">Portuguese (Brazil)</option>
+                        <option value="zh-CN">Chinese (Mandarin, Simplified)</option>
+                        <option value="ja-JP">Japanese (Japan)</option>
+                        <option value="ko-KR">Korean (Korea)</option>
+                        <option value="hi-IN">Hindi (India)</option>
+                        <option value="ar-AE">Arabic (UAE)</option>
+                        </select>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-gray-700 font-semibold mb-2">Action Type</label>
+                <div class="flex flex-wrap gap-x-6 gap-y-3">
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="actionType" value="translate" class="form-radio text-blue-600 h-5 w-5" checked data-action-group="textual_process">
+                        <span class="ml-2">Translate</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="actionType" value="sentiment" class="form-radio text-blue-600 h-5 w-5" data-action-group="textual_process">
+                        <span class="ml-2">Sentiment Analysis</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="actionType" value="summarize_extractive" class="form-radio text-blue-600 h-5 w-5" data-action-group="textual_process">
+                        <span class="ml-2">Extractive Summary</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="actionType" value="summarize_abstractive" class="form-radio text-blue-600 h-5 w-5" data-action-group="textual_process">
+                        <span class="ml-2">Abstractive Summary</span>
+                    </label>
+                    <label id="transcribeOptionLabel" class="inline-flex items-center hidden"> {# Initially hidden, shown for audio_file input type #}
+                        <input type="radio" name="actionType" value="transcribe_audio" class="form-radio text-blue-600 h-5 w-5" data-action-group="audio_only_process">
+                        <span class="ml-2">Transcribe Audio</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div id="translateOptions" class="action-options mt-4 p-4 border rounded-md bg-gray-50">
+                <label class="block text-gray-700 font-semibold mb-2">Target Languages</label>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <label class="inline-flex items-center"><input type="checkbox" name="targetLanguagesClient[]" value="es" class="form-checkbox text-blue-600"><span class="ml-2">Spanish</span></label>
+                    <label class="inline-flex items-center"><input type="checkbox" name="targetLanguagesClient[]" value="fr" class="form-checkbox text-blue-600"><span class="ml-2">French</span></label>
+                    <label class="inline-flex items-center"><input type="checkbox" name="targetLanguagesClient[]" value="de" class="form-checkbox text-blue-600"><span class="ml-2">German</span></label>
+                    <label class="inline-flex items-center"><input type="checkbox" name="targetLanguagesClient[]" value="it" class="form-checkbox text-blue-600"><span class="ml-2">Italian</span></label>
+                    <label class="inline-flex items-center"><input type="checkbox" name="targetLanguagesClient[]" value="zh-Hans" class="form-checkbox text-blue-600"><span class="ml-2">Chinese (Simp.)</span></label>
+                    <label class="inline-flex items-center"><input type="checkbox" name="targetLanguagesClient[]" value="ja" class="form-checkbox text-blue-600"><span class="ml-2">Japanese</span></label>
+                    <label class="inline-flex items-center"><input type="checkbox" name="targetLanguagesClient[]" value="hi" class="form-checkbox text-blue-600"><span class="ml-2">Hindi</span></label>
+                    <label class="inline-flex items-center"><input type="checkbox" name="targetLanguagesClient[]" value="ar" class="form-checkbox text-blue-600"><span class="ml-2">Arabic</span></label>
+                    <label class="inline-flex items-center"><input type="checkbox" name="targetLanguagesClient[]" value="ko" class="form-checkbox text-blue-600"><span class="ml-2">Korean</span></label>
+                    <label class="inline-flex items-center"><input type="checkbox" name="targetLanguagesClient[]" value="pt" class="form-checkbox text-blue-600"><span class="ml-2">Portuguese</span></label>
+                    <label class="inline-flex items-center"><input type="checkbox" name="targetLanguagesClient[]" value="ru" class="form-checkbox text-blue-600"><span class="ml-2">Russian</span></label>
+                    <label class="inline-flex items-center"><input type="checkbox" name="targetLanguagesClient[]" value="en" class="form-checkbox text-blue-600" checked><span class="ml-2">English (Target)</span></label>
+                </div>
+                <div class="mt-3">
+                    <label for="sourceLanguage" class="block text-gray-700 text-sm font-medium mb-1">Source Language (optional)</label>
+                    <select id="sourceLanguage" name="sourceLanguageClient" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                        <option value="">Auto-detect</option>
+                        <option value="en">English</option>
+                        <option value="es">Spanish</option>
+                        <option value="fr">French</option>
+                        <option value="de">German</option>
+                        <option value="it">Italian</option>
+                        <option value="zh-Hans">Chinese (Simplified)</option>
+                        <option value="ja">Japanese</option>
+                        <option value="hi">Hindi</option>
+                        <option value="ar">Arabic</option>
+                        <option value="ko">Korean</option>
+                        <option value="pt">Portuguese</option>
+                        <option value="ru">Russian</option>
+                        </select>
+                </div>
+            </div>
+            
+            <div id="summaryOptions" class="action-options hidden mt-4 p-4 border rounded-md bg-gray-50">
+                <label for="sentenceCount" class="block text-gray-700 font-semibold mb-2">Number of Sentences (for Extractive/Abstractive)</label>
+                <input type="number" id="sentenceCount" name="sentenceCountClient" min="1" max="20" value="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            
+            <div class="flex justify-center pt-4">
+                <button type="submit" id="processButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95">
+                    <i class="fas fa-cogs mr-2"></i>Process
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <div id="resultsSection" class="bg-white shadow-md rounded-lg p-6 mb-8 hidden">
+        <h2 class="text-2xl font-bold text-blue-600 mb-4">Results</h2>
+        <div id="loadingIndicator" class="text-center py-4 hidden">
+            <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-500 mx-auto"></div>
+            <p class="mt-3 text-gray-600">Processing your request, please wait...</p>
+        </div>
+        <div id="resultsContent" class="prose max-w-none"></div>
+    </div>
+    
+    {% if not current_user.is_authenticated %}
+    <div class="bg-blue-50 border-l-4 border-blue-500 text-blue-700 p-4 mb-8 rounded-md">
+        <div class="flex">
+            <div class="py-1"><i class="fas fa-info-circle fa-lg mr-3 text-blue-500"></i></div>
+            <div>
+                <p class="font-semibold">Want to save your results?</p>
+                <p class="text-sm">
+                    <a href="{{ url_for('login') }}" class="text-blue-600 hover:underline font-medium">Log in</a> or 
+                    <a href="{{ url_for('register') }}" class="text-blue-600 hover:underline font-medium">register</a> 
+                    to save your processing history and access more features.
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <div class="bg-white shadow-md rounded-lg p-6">
+        <h2 class="text-2xl font-bold text-blue-600 mb-4">Features Overview</h2>
+        <div class="grid md:grid-cols-2 gap-6">
+            <div class="border border-gray-200 rounded-lg p-4 hover:shadow-lg transition-shadow duration-200">
+                <h3 class="text-xl font-semibold text-blue-600 mb-2"><i class="fas fa-language mr-2 text-blue-500"></i> Text Translation</h3>
+                <p class="text-gray-700 text-sm">Translate text to multiple languages simultaneously using Azure's advanced translation services.</p>
+            </div>
+            <div class="border border-gray-200 rounded-lg p-4 hover:shadow-lg transition-shadow duration-200">
+                <h3 class="text-xl font-semibold text-blue-600 mb-2"><i class="fas fa-smile-beam mr-2 text-yellow-500"></i> Sentiment Analysis</h3>
+                <p class="text-gray-700 text-sm">Analyze the sentiment of text to determine if it's positive, negative, or neutral with confidence scores and opinion mining.</p>
+            </div>
+            <div class="border border-gray-200 rounded-lg p-4 hover:shadow-lg transition-shadow duration-200">
+                <h3 class="text-xl font-semibold text-blue-600 mb-2"><i class="fas fa-file-alt mr-2 text-green-500"></i> Text Summarization</h3>
+                <p class="text-gray-700 text-sm">Generate concise summaries of long texts using extractive or abstractive summarization techniques.</p>
+            </div>
+            <div class="border border-gray-200 rounded-lg p-4 hover:shadow-lg transition-shadow duration-200">
+                <h3 class="text-xl font-semibold text-blue-600 mb-2"><i class="fas fa-microphone-alt mr-2 text-purple-500"></i> Speech Transcription</h3>
+                <p class="text-gray-700 text-sm">Convert speech to text from audio files with support for multiple languages.</p>
+            </div>
+             <div class="border border-gray-200 rounded-lg p-4 hover:shadow-lg transition-shadow duration-200 md:col-span-2">
+                <h3 class="text-xl font-semibold text-blue-600 mb-2"><i class="fab fa-youtube mr-2 text-red-500"></i> YouTube Transcript</h3>
+                <p class="text-gray-700 text-sm">Extract transcripts from YouTube videos to easily process video content as text.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputTypeRadios = document.querySelectorAll('input[name="inputType"]');
+        const inputSections = {
+            text: document.getElementById('textInputSection'),
+            pdf: document.getElementById('pdfInputSection'),
+            youtube: document.getElementById('youtubeInputSection'),
+            audio_file: document.getElementById('audioFileInputSection')
+        };
+        const transcribeOptionLabel = document.getElementById('transcribeOptionLabel');
+        const actionTypeRadios = document.querySelectorAll('input[name="actionType"]');
+        const allActionOptionDivs = document.querySelectorAll('.action-options');
+        const translateOptionsDiv = document.getElementById('translateOptions');
+        const summaryOptionsDiv = document.getElementById('summaryOptions');
+        const processButton = document.getElementById('processButton');
+        const form = document.getElementById('textProcessingForm');
+        const resultsSection = document.getElementById('resultsSection');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const resultsContent = document.getElementById('resultsContent');
+
+        function updateInputSections() {
+            let selectedInputType = document.querySelector('input[name="inputType"]:checked').value;
+
+            for (const type in inputSections) {
+                if (inputSections[type]) {
+                    inputSections[type].classList.toggle('hidden', type !== selectedInputType);
+                }
+            }
+            
+            const textualProcessingActions = document.querySelectorAll('input[data-action-group="textual_process"]');
+            const audioOnlyProcessingAction = document.querySelector('input[data-action-group="audio_only_process"]');
+
+            if (selectedInputType === 'audio_file') {
+                transcribeOptionLabel.classList.remove('hidden');
+                if (audioOnlyProcessingAction) audioOnlyProcessingAction.disabled = false;
+                textualProcessingActions.forEach(radio => radio.disabled = false);
+            } else { 
+                transcribeOptionLabel.classList.add('hidden');
+                if (audioOnlyProcessingAction) {
+                    if (audioOnlyProcessingAction.checked) {
+                        document.querySelector('input[name="actionType"][value="translate"]').checked = true;
+                    }
+                    audioOnlyProcessingAction.disabled = true;
+                }
+                 textualProcessingActions.forEach(radio => radio.disabled = false);
+            }
+            updateActionOptionsVisibility();
+        }
+
+        function updateActionOptionsVisibility() {
+            allActionOptionDivs.forEach(div => div.classList.add('hidden'));
+            const selectedActionRadio = document.querySelector('input[name="actionType"]:checked');
+            if (!selectedActionRadio) return;
+            
+            const actionType = selectedActionRadio.value;
+            
+            if (actionType === 'translate') {
+                translateOptionsDiv.classList.remove('hidden');
+            } else if (actionType.includes('summarize')) {
+                summaryOptionsDiv.classList.remove('hidden');
+            }
+        }
+        
+        updateInputSections();
+        
+        inputTypeRadios.forEach(radio => radio.addEventListener('change', updateInputSections));
+        actionTypeRadios.forEach(radio => radio.addEventListener('change', updateActionOptionsVisibility));
+        
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            resultsSection.classList.remove('hidden');
+            loadingIndicator.classList.remove('hidden');
+            resultsContent.innerHTML = '';
+            processButton.disabled = true;
+            processButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
+            
+            const currentInputType = document.querySelector('input[name="inputType"]:checked').value;
+            const currentActionType = document.querySelector('input[name="actionType"]:checked').value;
+            
+            let textToProcess = null;
+            let sourceNameForDisplay = 'N/A';
+            let preliminaryStepNeeded = false;
+            let requestBody; // Will be either FormData or JSON string
+            let requestHeaders = {};
+            let endpoint = '';
+
+            // --- Step 1: Prepare data based on input type and action ---
+            if (currentInputType === 'text') {
+                textToProcess = document.getElementById('textContent').value;
+                sourceNameForDisplay = "Direct Text Input";
+                if (!textToProcess.trim()) { showError('Please enter some text to process.'); return; }
+            } else if (currentInputType === 'youtube') {
+                preliminaryStepNeeded = true; // Transcript fetch is a preliminary step
+                sourceNameForDisplay = document.getElementById('youtubeUrl').value;
+                if (!sourceNameForDisplay.trim()) { showError('Please enter a YouTube URL.'); return; }
+                
+                resultsContent.innerHTML = '<p class="text-sm text-gray-600"><i class="fas fa-spinner fa-spin mr-2"></i>Fetching YouTube transcript...</p>';
+                try {
+                    const transcriptResponse = await fetch("{{ url_for('youtube_transcript_api_route') }}", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: sourceNameForDisplay })
+                    });
+                    if (!transcriptResponse.ok) {
+                        const errData = await transcriptResponse.json().catch(() => ({}));
+                        throw new Error(errData.error || `Failed to fetch transcript (HTTP ${transcriptResponse.status})`);
+                    }
+                    const transcriptResult = await transcriptResponse.json();
+                    if (transcriptResult.status !== 'success' || !transcriptResult.transcript?.text) {
+                        throw new Error(transcriptResult.error || "Could not retrieve transcript text.");
+                    }
+                    textToProcess = transcriptResult.transcript.text;
+                    resultsContent.innerHTML = `<div class="bg-yellow-50 p-2 rounded-md text-xs mb-2">YouTube transcript fetched successfully. Now processing for ${currentActionType.replace("_", " ")}...</div>`;
+                } catch (error) {
+                    showError(`Error fetching YouTube transcript: ${error.message}`);
+                    return;
+                }
+            } else if (currentInputType === 'audio_file') {
+                const audioFile = document.getElementById('audioFile').files[0];
+                if (!audioFile) { showError('Please select an audio file.'); return; }
+                sourceNameForDisplay = audioFile.name;
+
+                if (currentActionType === 'transcribe_audio') {
+                    endpoint = "{{ url_for('transcribe_audio_route') }}";
+                    const formData = new FormData();
+                    formData.append('audio', audioFile);
+                    const lang = document.getElementById('transcriptionLanguage').value;
+                    if (lang) formData.append('language', lang);
+                    requestBody = formData; // No explicit Content-Type header for FormData
+                } else { // Textual action on audio: needs transcription first
+                    preliminaryStepNeeded = true;
+                    resultsContent.innerHTML = '<p class="text-sm text-gray-600"><i class="fas fa-spinner fa-spin mr-2"></i>Transcribing audio...</p>';
+                    const transcribeFormData = new FormData();
+                    transcribeFormData.append('audio', audioFile);
+                    const lang = document.getElementById('transcriptionLanguage').value;
+                    if (lang) transcribeFormData.append('language', lang);
+                    try {
+                        const transcribeResponse = await fetch("{{ url_for('transcribe_audio_route') }}", {
+                            method: 'POST', body: transcribeFormData
+                        });
+                        if (!transcribeResponse.ok) {
+                            const errData = await transcribeResponse.json().catch(() => ({}));
+                            throw new Error(errData.error || `Failed to transcribe audio (HTTP ${transcribeResponse.status})`);
+                        }
+                        const transcribeResult = await transcribeResponse.json();
+                        if (transcribeResult.status !== 'success' || !transcribeResult.transcription?.text) {
+                            throw new Error(transcribeResult.error || "Could not retrieve transcription text.");
+                        }
+                        textToProcess = transcribeResult.transcription.text;
+                        resultsContent.innerHTML = `<div class="bg-yellow-50 p-2 rounded-md text-xs mb-2">Audio transcribed successfully. Now processing for ${currentActionType.replace("_", " ")}...</div>`;
+                    } catch (error) {
+                        showError(`Error transcribing audio: ${error.message}`);
+                        return;
+                    }
+                }
+            } else if (currentInputType === 'pdf') {
+                const pdfFile = document.getElementById('pdfFile').files[0];
+                if (!pdfFile) { showError('Please select a PDF file.'); return; }
+                sourceNameForDisplay = pdfFile.name;
+                // For PDF, the server will handle text extraction. Send as FormData.
+                const formData = new FormData();
+                formData.append('pdf_file', pdfFile); // Server expects 'pdf_file'
+                // Add other necessary parameters for the specific action to FormData
+                formData.append('actionType', currentActionType); // Inform server of intended action
+                
+                if (currentActionType === 'translate') {
+                    const targetLanguages = Array.from(document.querySelectorAll('input[name="targetLanguagesClient[]"]:checked')).map(cb => cb.value);
+                    if (targetLanguages.length === 0) { showError('Select at least one target language for PDF translation.'); return; }
+                    // FormData handles arrays by appending multiple times with same key
+                    targetLanguages.forEach(lang => formData.append('target_languages[]', lang));
+                    const sourceLang = document.getElementById('sourceLanguage').value;
+                    if (sourceLang) formData.append('source_language', sourceLang);
+                    endpoint = "{{ url_for('translate_text_api') }}";
+                } else if (currentActionType === 'sentiment') {
+                    endpoint = "{{ url_for('analyze_sentiment_api') }}";
+                } else if (currentActionType.includes('summarize')) {
+                    formData.append('type', currentActionType.includes('extractive') ? 'extractive' : 'abstractive');
+                    formData.append('sentence_count', document.getElementById('sentenceCount').value || '3');
+                    endpoint = "{{ url_for('summarize_api') }}";
+                }
+                requestBody = formData; // No explicit Content-Type for FormData
+            }
+
+            // --- Step 2: Perform the main action if not already done (e.g., direct transcription) ---
+            if (currentActionType !== 'transcribe_audio' && currentInputType !== 'pdf') { // PDF handled above by setting requestBody to FormData
+                const payloadForAction = {};
+                if (textToProcess === null) { // Should only happen if a preliminary step failed or wasn't needed but text is still null
+                    showError(`Cannot perform '${currentActionType}' because text input is missing.`); return;
+                }
+                payloadForAction.text = textToProcess;
+
+                if (currentActionType === 'translate') {
+                    endpoint = "{{ url_for('translate_text_api') }}";
+                    const targetLanguages = Array.from(document.querySelectorAll('input[name="targetLanguagesClient[]"]:checked')).map(cb => cb.value);
+                    if (targetLanguages.length === 0) { showError('Select at least one target language.'); return; }
+                    payloadForAction.target_languages = targetLanguages;
+                    const sourceLanguage = document.getElementById('sourceLanguage').value;
+                    if (sourceLanguage) payloadForAction.source_language = sourceLanguage;
+                } else if (currentActionType === 'sentiment') {
+                    endpoint = "{{ url_for('analyze_sentiment_api') }}";
+                } else if (currentActionType.includes('summarize')) {
+                    endpoint = "{{ url_for('summarize_api') }}";
+                    payloadForAction.type = currentActionType.includes('extractive') ? 'extractive' : 'abstractive';
+                    payloadForAction.sentence_count = parseInt(document.getElementById('sentenceCount').value) || 3;
+                }
+                requestBody = JSON.stringify(payloadForAction);
+                requestHeaders['Content-Type'] = 'application/json';
+            }
+            
+            if (!endpoint) { showError('Could not determine the API endpoint for the selected action and input type.'); return; }
+
+            try {
+                const response = await fetch(endpoint, { method: 'POST', body: requestBody, headers: requestHeaders });
+                if (!response.ok) {
+                    let errorMsg = `Error ${response.status}: ${response.statusText}`;
+                    try { const errData = await response.json(); errorMsg = errData.error || errData.message || errorMsg; }
+                    catch (jsonErr) { /* Ignore */ }
+                    throw new Error(errorMsg);
+                }
+                const result = await response.json();
+
+                if (result.status === 'success' || response.ok) {
+                    displayResults(result, currentActionType, currentInputType, sourceNameForDisplay, textToProcess);
+                } else {
+                    showError(result.error || 'An error occurred during processing.');
+                }
+            } catch (error) {
+                console.error('Action Error:', error);
+                showError(`Error performing action: ${error.message}`);
+            } finally {
+                processButton.disabled = false;
+                processButton.innerHTML = '<i class="fas fa-cogs mr-2"></i>Process';
+            }
+        });
+        
+        function showError(message) {
+            loadingIndicator.classList.add('hidden');
+            resultsContent.innerHTML = `
+                <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
+                    <p class="font-bold">Error</p>
+                    <p>${escapeHtml(message)}</p>
+                </div>`;
+             processButton.disabled = false; 
+             processButton.innerHTML = '<i class="fas fa-cogs mr-2"></i>Process';
+        }
+        
+        function displayResults(result, actionType, inputType, sourceName = null, originalTextUsed = null) {
+            loadingIndicator.classList.add('hidden');
+            let existingContent = resultsContent.innerHTML; 
+            if (existingContent.includes("Now processing for")) { 
+                 existingContent += '<hr class="my-4 border-gray-300">';
+            } else {
+                existingContent = ""; 
+            }
+
+            let html = existingContent + '<div class="space-y-6 mt-2">';
+            const displaySource = sourceName || (inputType === 'text' ? 'Direct Text Input' : 'Uploaded File/URL');
+            if (!existingContent.includes("Source:")) { 
+                html += `<p class="mb-2 text-sm text-gray-600"><strong>Source:</strong> <em class="break-all">${escapeHtml(displaySource)}</em></p>`;
+            }
+            
+            // Use result.original_text_processed from backend if available (especially for PDF)
+            const textForDisplay = result.original_text_processed || originalTextUsed;
+
+            if (textForDisplay && (actionType === 'translate' || actionType === 'sentiment' || actionType.includes('summarize'))) {
+                 if (!existingContent.includes("Original Text") && !existingContent.includes("Processed Input Text")) { 
+                    html += `<div class="mb-4"><h4 class="font-semibold text-gray-700 mb-1 text-base">${result.original_text_processed ? 'Processed Input Text' : 'Original Text (or Transcript)'}:</h4><div class="bg-gray-50 p-3 rounded-md text-sm max-h-60 overflow-y-auto custom-scrollbar"><pre class="whitespace-pre-wrap break-words">${escapeHtml(textForDisplay)}</pre></div></div>`;
+                 }
+            }
+            if (!existingContent.includes("<hr")) html += `<hr class="my-3">`;
+
+            if (actionType === 'translate' && result.translations) {
+                html += `<h3 class="text-xl font-semibold text-blue-500 mb-2">Translation Results</h3><div class="space-y-3">`;
+                for (const [lang, text] of Object.entries(result.translations)) {
+                    html += `<div class="border border-gray-200 rounded-md p-3 bg-white"><div class="font-medium text-gray-800 mb-1">${escapeHtml(getLangName(lang))}</div><p class="text-gray-700 whitespace-pre-wrap break-words">${escapeHtml(text)}</p></div>`;
+                }
+                html += `</div>`;
+            } else if (actionType === 'sentiment' && result.sentiment_analysis) {
+                const sentimentData = result.sentiment_analysis;
+                let sClass = sentimentData.sentiment === 'positive' ? 'text-green-600' : sentimentData.sentiment === 'negative' ? 'text-red-600' : (sentimentData.sentiment === 'neutral' ? 'text-yellow-600' : 'text-gray-600');
+                html += `<h3 class="text-xl font-semibold text-blue-500 mb-3">Sentiment Analysis</h3><p class="mb-1"><strong>Overall Sentiment:</strong> <span class="font-bold ${sClass}">${escapeHtml(sentimentData.sentiment)}</span></p>`;
+                if(sentimentData.confidence_scores) {html += `<div class="text-sm"><strong>Confidence:</strong> Pos: ${(sentimentData.confidence_scores.positive * 100).toFixed(1)}%, Neu: ${(sentimentData.confidence_scores.neutral * 100).toFixed(1)}%, Neg: ${(sentimentData.confidence_scores.negative * 100).toFixed(1)}%</div>`;}
+                if (sentimentData.sentences?.length > 0) {
+                    html += `<h4 class="font-semibold text-gray-700 mt-4 mb-2 text-md">Sentence-level Analysis & Opinions:</h4>`;
+                    sentimentData.sentences.forEach(s => {
+                        let ssc = s.sentiment === 'positive' ? 'text-green-700 border-green-400 bg-green-50' : s.sentiment === 'negative' ? 'text-red-700 border-red-400 bg-red-50' : (s.sentiment === 'neutral' ? 'text-yellow-700 border-yellow-400 bg-yellow-50' : 'text-gray-700 border-gray-300 bg-gray-50');
+                        html += `<div class="my-2 p-3 border-l-4 ${ssc} rounded-r-md text-sm"><p class="italic">"${escapeHtml(s.text)}"</p><p class="mt-1"><strong>Sentiment:</strong> <span class="${s.sentiment === 'positive' ? 'text-green-700' : s.sentiment === 'negative' ? 'text-red-700' : 'text-yellow-700'}">${escapeHtml(s.sentiment)}</span></p>`;
+                        if(s.opinions?.length > 0){
+                            html += `<p class="mt-1 font-medium text-xs text-gray-600">Opinions:</p><ul class="list-disc list-inside pl-3 text-xs">`;
+                            s.opinions.forEach(op => {html += `<li>Target: "${escapeHtml(op.target_text)}" (<em>${escapeHtml(op.target_sentiment)}</em>) - Assessments: ${op.assessments.map(asm => `"${escapeHtml(asm.text)}" (<em>${escapeHtml(asm.sentiment)}</em>)`).join(', ')}</li>`;});
+                            html += `</ul>`;
+                        } html += `</div>`;});
+                }
+            } else if (actionType.includes('summarize') && result.summary_data) {
+                const summaryType = actionType.includes('extractive') ? 'Extractive' : 'Abstractive';
+                html += `<h3 class="text-xl font-semibold text-blue-500 mb-2">${escapeHtml(summaryType)} Summary</h3><div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-md text-gray-800 whitespace-pre-wrap break-words">${escapeHtml(result.summary_data.summary || result.summary_data.text || 'No summary available.')}</div>`;
+                if (result.summary_data.sentences && actionType === 'summarize_extractive') {
+                    html += `<h5 class="font-medium mt-3 mb-1 text-gray-700">Key Sentences:</h5><ul class="list-disc pl-5 text-sm text-gray-600 space-y-1">`;
+                    result.summary_data.sentences.forEach(s => { html += `<li>${escapeHtml(s)}</li>`; });
+                    html += `</ul>`;
+                }
+            } else if (actionType === 'transcribe_audio' && (result.transcription || result.transcript)) {
+                 html += `<h3 class="text-xl font-semibold text-blue-500 mb-2">Audio/Video Transcription</h3>`;
+                 const textToDisplay = result.transcription?.text || result.transcript?.text || 'No transcription available.';
+                 html += `<div class="bg-gray-50 p-3 rounded-md whitespace-pre-wrap break-words">${escapeHtml(textToDisplay)}</div>`;
+                 const langDetected = result.transcription?.language || result.transcript?.language;
+                 if (langDetected) html += `<p class="text-xs text-gray-500 mt-1">Detected Language: ${escapeHtml(langDetected)}</p>`;
+            } else if (inputType === 'pdf' && result.extracted_text) { 
+                html += `<h3 class="text-xl font-semibold text-blue-500 mb-2">Extracted PDF Text</h3><div class="bg-gray-50 p-3 rounded-md whitespace-pre-wrap break-words max-h-96 overflow-y-auto custom-scrollbar">${escapeHtml(result.extracted_text)}</div>`;
+            } else {
+                html += `<p class="text-gray-600">No specific results found for this action, or the result format is unrecognized.</p>`;
+                 if(result.error && !html.includes(result.error)) html += `<p class="text-red-500">Server Error: ${escapeHtml(result.error)}</p>`;
+            }
+            html += '</div>';
+            resultsContent.innerHTML = html;
+        }
+        
+        function getLangName(code) {
+            const languages = { 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian', 'zh-Hans': 'Chinese (Simplified)', 'ja': 'Japanese', 'hi': 'Hindi', 'ar': 'Arabic', 'ko': 'Korean', 'pt': 'Portuguese', 'ru': 'Russian'};
+            return languages[code] || code;
+        }
+
+        function escapeHtml(unsafe) {
+            if (typeof unsafe !== 'string') {
+                if (unsafe === null || typeof unsafe === 'undefined') return '';
+                try { return String(unsafe); } catch (e) { return ''; }
+            }
+            return unsafe
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+    });
+</script>
+{% endblock %}

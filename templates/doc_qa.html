@@ -1,0 +1,471 @@
+{% extends "base.html" %}
+
+{% block title %}Document Q&A - Azure AI Mega Toolkit{% endblock %}
+
+{% block styles %}
+<style>
+    .document-item {
+        transition: all 0.2s ease-in-out;
+    }
+    .document-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .document-item.selected {
+        border-color: #3B82F6; /* blue-500 */
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+        background-color: #EFF6FF; /* blue-50 */
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 8px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #cbd5e1; /* gray-300 */
+        border-radius: 10px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8; /* gray-400 */
+    }
+    
+    #toast-container { 
+        position: fixed; top: 1.25rem; right: 1.25rem; z-index: 9999;
+        width: 100%; max-width: 20rem; 
+        display: flex; flex-direction: column; gap: 0.5rem;
+    }
+    .toast-message {
+        transform: translateX(100%); opacity: 0;
+        transition: all 0.3s ease-out;
+    }
+    .toast-message.show { transform: translateX(0); opacity: 1; }
+
+    /* Styles for formatted answer content */
+    .formatted-answer-content {
+        line-height: 1.6;
+        color: #374151; /* gray-700 */
+        font-size: 0.875rem; /* text-sm */
+    }
+    .formatted-answer-content p {
+        margin-bottom: 0.75rem; 
+    }
+    .formatted-answer-content ul, 
+    .formatted-answer-content ol {
+        margin-left: 1.75rem; /* Increased indent */
+        margin-bottom: 0.75rem;
+        list-style-position: outside;
+    }
+    .formatted-answer-content ul {
+        list-style-type: disc;
+    }
+    .formatted-answer-content ol {
+        list-style-type: decimal;
+    }
+    .formatted-answer-content li {
+        margin-bottom: 0.3rem; 
+        padding-left: 0.25rem;
+    }
+    .formatted-answer-content strong,
+    .formatted-answer-content b {
+        font-weight: 600; /* semibold */
+    }
+     .context-document-display {
+        white-space: pre-wrap; 
+        word-break: break-word; 
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        background-color: #f9fafb; /* gray-50 */
+        border: 1px solid #e5e7eb; /* gray-200 */
+        border-radius: 0.375rem; /* rounded-md */
+        padding: 0.75rem; /* p-3 */
+        max-height: 12rem; /* max-h-48 */
+        overflow-y: auto;
+        font-size: 0.75rem; /* text-xs */
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="toast-container"></div>
+
+<div class="max-w-6xl mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold text-blue-700 mb-8 text-center">Document Question & Answer</h1>
+
+    <div class="grid md:grid-cols-3 gap-6">
+        <div class="md:col-span-1 bg-white p-6 rounded-lg shadow-xl flex flex-col">
+            <div>
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-3">Upload Document</h2>
+                <form id="uploadDocForm" class="space-y-4">
+                    <div>
+                        <label for="documentFile" class="block text-sm font-medium text-gray-700">Select File</label>
+                        <input type="file" id="documentFile" name="document" accept=".pdf,.txt,.docx" class="mt-1 block w-full text-sm text-gray-500
+                            file:mr-4 file:py-2 file:px-4
+                            file:rounded-md file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-blue-50 file:text-blue-700
+                            hover:file:bg-blue-100 cursor-pointer" required>
+                        <p class="mt-1 text-xs text-gray-500">Supported formats: PDF, TXT, DOCX.</p>
+                    </div>
+                    <button type="submit" id="uploadDocBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95">
+                        <i class="fas fa-upload mr-2"></i>Upload
+                    </button>
+                </form>
+                <div id="uploadStatus" class="mt-3 text-sm min-h-[20px]"></div>
+            </div>
+
+            <hr class="my-6">
+
+            <div class="flex-grow flex flex-col min-h-0">
+                <div class="flex justify-between items-center mb-4 border-b pb-3">
+                    <h2 class="text-xl font-semibold text-gray-800">My Documents</h2>
+                    <button id="refreshDocListBtn" title="Refresh Document List" class="text-blue-500 hover:text-blue-700 p-1">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div id="documentList" class="space-y-3 flex-grow overflow-y-auto custom-scrollbar pr-2 min-h-[200px] max-h-[calc(100vh-450px)]">
+                    <p class="text-gray-500 text-sm p-4 text-center">Loading documents...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="md:col-span-2 bg-white p-6 rounded-lg shadow-xl">
+            <h2 class="text-xl font-semibold text-gray-800 mb-1">Ask a Question</h2>
+            <p id="selectedDocInfo" class="text-sm text-gray-600 mb-4 min-h-[20px]">Select a document from the list to start asking questions.</p>
+            
+            <div id="qaSection" class="hidden">
+                <form id="askQuestionForm" class="flex items-center mb-6">
+                    <input type="text" id="questionInput" name="question" placeholder="Ask a question about the selected document..." class="flex-grow p-3 border border-gray-300 rounded-l-md focus:ring-blue-500 focus:border-blue-500 text-sm" required>
+                    <button type="submit" id="askQuestionBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold p-3 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors">
+                        <i class="fas fa-paper-plane"></i> Ask
+                    </button>
+                </form>
+
+                <div id="answerSection" class="mt-4 space-y-4">
+                    <div id="answerLoadingIndicator" class="text-center py-4 hidden">
+                        <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+                        <p class="mt-2 text-sm text-gray-600">Finding an answer...</p>
+                    </div>
+                    <div id="answerContentWrapper" class="bg-gray-50 p-4 rounded-md min-h-[100px]">
+                         <div id="answerContent" class="text-gray-500 italic">The answer will appear here.</div>
+                    </div>
+                </div>
+            </div>
+             <div id="noDocSelectedMessage" class="text-center py-10 text-gray-500">
+                <i class="fas fa-hand-pointer text-4xl mb-3"></i>
+                <p>Please select a document from the "My Documents" list to activate this area.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadDocForm = document.getElementById('uploadDocForm');
+    const uploadDocBtn = document.getElementById('uploadDocBtn');
+    const uploadStatus = document.getElementById('uploadStatus');
+    const documentListDiv = document.getElementById('documentList');
+    const selectedDocInfo = document.getElementById('selectedDocInfo');
+    const qaSection = document.getElementById('qaSection');
+    const askQuestionForm = document.getElementById('askQuestionForm');
+    const questionInput = document.getElementById('questionInput');
+    const askQuestionBtn = document.getElementById('askQuestionBtn');
+    const answerLoadingIndicator = document.getElementById('answerLoadingIndicator');
+    const answerContentDiv = document.getElementById('answerContent'); 
+    const answerContentWrapper = document.getElementById('answerContentWrapper');
+
+    let selectedDocumentId = null;
+    let selectedDocumentName = null;
+
+    function escapeHtml(unsafe) {
+        if (typeof unsafe !== 'string') {
+            if (unsafe === null || typeof unsafe === 'undefined') return '';
+            try { return String(unsafe); } catch (e) { return '';}
+        }
+        return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    function showToast(message, type = 'info', duration = 4000) {
+        const toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) { console.warn("Toast container not found."); alert(`${type.toUpperCase()}: ${message}`); return; }
+        const toastId = `toast-${Date.now()}`;
+        const toast = document.createElement('div');
+        toast.id = toastId;
+        toast.className = 'toast-message max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden mb-2';
+        let iconHtml = '', titleColor = 'text-gray-900', bgColor = 'bg-white';
+        if (type === 'success') { iconHtml = '<i class="fas fa-check-circle text-green-500"></i>'; titleColor = 'text-green-700'; bgColor = 'bg-green-50';}
+        else if (type === 'error') { iconHtml = '<i class="fas fa-times-circle text-red-500"></i>'; titleColor = 'text-red-700'; bgColor = 'bg-red-50';}
+        else if (type === 'warning') { iconHtml = '<i class="fas fa-exclamation-triangle text-yellow-500"></i>'; titleColor = 'text-yellow-700'; bgColor = 'bg-yellow-50';}
+        else { iconHtml = '<i class="fas fa-info-circle text-blue-500"></i>'; titleColor = 'text-blue-700'; bgColor = 'bg-blue-50';}
+        toast.innerHTML = `<div class="p-4 ${bgColor}"><div class="flex items-start"><div class="flex-shrink-0 pt-0.5">${iconHtml}</div><div class="ml-3 w-0 flex-1"><p class="text-sm font-medium ${titleColor}">${type.charAt(0).toUpperCase() + type.slice(1)}</p><p class="mt-1 text-sm text-gray-600">${escapeHtml(message)}</p></div><div class="ml-4 flex-shrink-0 flex"><button type="button" class="inline-flex rounded-md bg-transparent text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" onclick="document.getElementById('${toastId}').remove()"><span class="sr-only">Close</span> <i class="fas fa-times"></i></button></div></div></div>`;
+        toastContainer.prepend(toast);
+        requestAnimationFrame(() => { toast.classList.add('show'); });
+        setTimeout(() => { if (document.getElementById(toastId)) { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); } }, duration);
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === null || typeof bytes === 'undefined' || isNaN(parseFloat(bytes)) || !isFinite(bytes)) return 'N/A';
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024; const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']; const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    async function fetchDocuments() {
+        if (!documentListDiv) return;
+        documentListDiv.innerHTML = '<p class="text-gray-500 text-sm p-4 text-center"><i class="fas fa-spinner fa-spin mr-2"></i>Loading documents...</p>';
+        try {
+            const response = await fetch("{{ url_for('get_user_documents_route') }}");
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({error: "Server error, no details."}));
+                throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || response.statusText}`);
+            }
+            const data = await response.json();
+            if (data.status === 'success' && data.documents) { renderDocumentList(data.documents); } 
+            else { documentListDiv.innerHTML = `<p class="text-red-500 text-sm p-4 text-center">Error loading documents: ${escapeHtml(data.error || 'Unknown error.')}</p>`; }
+        } catch (error) {
+            console.error('Error fetching documents:', error);
+            documentListDiv.innerHTML = `<p class="text-red-500 text-sm p-4 text-center">Could not fetch documents. Error: ${escapeHtml(error.message)}</p>`;
+        }
+    }
+
+    if(refreshDocListBtn) { refreshDocListBtn.addEventListener('click', fetchDocuments); }
+
+    function renderDocumentList(documents) {
+        if (!documentListDiv) return;
+        if (!documents || documents.length === 0) {
+            documentListDiv.innerHTML = '<p class="text-gray-500 text-sm p-4 text-center">No documents uploaded yet.</p>'; return;
+        }
+        documentListDiv.innerHTML = ''; 
+        documents.forEach(doc => {
+            const docElement = document.createElement('div');
+            docElement.className = `document-item p-3 border border-gray-200 rounded-md cursor-pointer hover:bg-gray-50 flex justify-between items-center ${selectedDocumentId === doc.id ? 'selected' : ''}`;
+            docElement.dataset.docId = doc.id; docElement.dataset.docName = doc.file_name;
+            const fileSizeFormatted = doc.file_size_formatted || formatFileSize(doc.file_size);
+            const docDisplayName = escapeHtml(doc.file_name);
+            const uploadDate = doc.timestamp || doc.upload_date;
+            docElement.innerHTML = `
+                <div class="truncate mr-2 flex-grow">
+                    <h4 class="font-medium text-blue-600 text-sm truncate" title="${docDisplayName}">${docDisplayName}</h4>
+                    <p class="text-xs text-gray-500">Size: ${escapeHtml(fileSizeFormatted)}</p>
+                    <p class="text-xs text-gray-500">Uploaded: ${escapeHtml(uploadDate ? new Date(uploadDate).toLocaleDateString() : 'N/A')}</p>
+                </div>
+                <button class="delete-doc-btn text-red-400 hover:text-red-600 text-xs p-1 flex-shrink-0 focus:outline-none ring-offset-2 focus:ring-2 focus:ring-red-500 rounded" data-doc-id="${doc.id}" title="Delete document"><i class="fas fa-trash-alt fa-fw"></i></button>`;
+            docElement.addEventListener('click', (event) => {
+                if (event.target.closest('.delete-doc-btn')) return; 
+                selectDocument(doc.id, doc.file_name);
+            });
+            const deleteBtn = docElement.querySelector('.delete-doc-btn');
+            if (deleteBtn) { deleteBtn.addEventListener('click', (event) => { event.stopPropagation(); deleteDocument(doc.id, doc.file_name); }); }
+            documentListDiv.appendChild(docElement);
+        });
+    }
+
+    function selectDocument(docId, docName) {
+        selectedDocumentId = docId; selectedDocumentName = docName; 
+        if (selectedDocInfo) selectedDocInfo.innerHTML = `Asking questions about: <strong class="text-blue-600">${escapeHtml(docName)}</strong>`;
+        if (qaSection) qaSection.classList.remove('hidden');
+        if (noDocSelectedMessage) noDocSelectedMessage.classList.add('hidden');
+        if (questionInput) questionInput.value = '';
+        if (answerContentDiv) {
+            answerContentDiv.innerHTML = '<p class="text-gray-500 italic">The answer will appear here.</p>';
+            answerContentDiv.className = 'text-gray-500 italic'; 
+        }
+        document.querySelectorAll('.document-item').forEach(item => { item.classList.toggle('selected', item.dataset.docId === docId); });
+    }
+
+    if (uploadDocForm) {
+        uploadDocForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const formData = new FormData(uploadDocForm); const fileInput = document.getElementById('documentFile');
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                if(uploadStatus) uploadStatus.innerHTML = '<p class="text-red-500">Please select a file.</p>';
+                showToast('Please select a file to upload.', 'warning'); return;
+            }
+            if(uploadDocBtn) { uploadDocBtn.disabled = true; uploadDocBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Uploading...';}
+            if(uploadStatus) uploadStatus.innerHTML = '<p class="text-blue-600">Uploading...</p>';
+            try {
+                const response = await fetch("{{ url_for('upload_document_for_qa_api') }}", { method: 'POST', body: formData });
+                const result = await response.json();
+                if (response.ok && result.status === 'success') {
+                    if(uploadStatus) uploadStatus.innerHTML = `<p class="text-green-600">"${escapeHtml(result.filename)}" uploaded.</p>`;
+                    fetchDocuments(); uploadDocForm.reset();
+                    showToast(`Document "${escapeHtml(result.filename)}" uploaded.`, 'success');
+                } else {
+                    if(uploadStatus) uploadStatus.innerHTML = `<p class="text-red-500">Upload failed: ${escapeHtml(result.error || 'Unknown error')}</p>`;
+                    showToast(`Upload failed: ${escapeHtml(result.error || 'Unknown error')}`, 'error');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                if(uploadStatus) uploadStatus.innerHTML = `<p class="text-red-500">Upload error: ${escapeHtml(error.message)}</p>`;
+                showToast(`Upload error: ${escapeHtml(error.message)}`, 'error');
+            } finally {
+                if(uploadDocBtn) {uploadDocBtn.disabled = false; uploadDocBtn.innerHTML = '<i class="fas fa-upload mr-2"></i>Upload';}
+            }
+        });
+    }
+
+    async function deleteDocument(docId, docName) {
+        if (!confirm(`Delete "${escapeHtml(docName)}"?`)) return;
+        try {
+            const response = await fetch(`{{ url_for('api_document_delete_route', document_id='PLACEHOLDER_ID') }}`.replace('PLACEHOLDER_ID', docId), { method: 'DELETE' });
+            const result = await response.json();
+            if (response.ok && result.status === 'success') {
+                showToast(`"${escapeHtml(docName)}" deleted.`, 'success'); fetchDocuments(); 
+                if (selectedDocumentId === docId) { 
+                    selectedDocumentId = null; selectedDocumentName = null;
+                    if(selectedDocInfo) selectedDocInfo.textContent = 'Select a document to ask questions.';
+                    if(qaSection) qaSection.classList.add('hidden');
+                    if(noDocSelectedMessage) noDocSelectedMessage.classList.remove('hidden');
+                    if(answerContentDiv) {
+                        answerContentDiv.innerHTML = '<p class="text-gray-500 italic">Answer here.</p>';
+                        answerContentDiv.className = 'text-gray-500 italic';
+                    }
+                }
+            } else { showToast(`Delete error: ${escapeHtml(result.error || 'Unknown error')}`, 'error'); }
+        } catch (error) {
+            console.error('Delete error:', error);
+            showToast(`Server error deleting. ${escapeHtml(error.message)}`, 'error');
+        }
+    }
+    
+    function formatAnswerTextToHtml(text) {
+        if (!text || typeof text !== 'string') {
+            return '<p class="text-gray-500 italic">No answer content provided.</p>';
+        }
+
+        // 1. Normalize all newline types to \n
+        let normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+        // 2. Split into blocks by one or more newlines. This treats each line from PDF as a potential paragraph start.
+        const blocks = normalizedText.split(/\n+/).map(block => block.trim()).filter(block => block.length > 0);
+        
+        let formattedHtml = '';
+        let currentListType = null; // null, 'ul', or 'ol'
+        let listItemsHtml = '';
+
+        blocks.forEach((block, index) => {
+            const isBulletedListItem = /^\s*([*\-•–—])\s+/.test(block);
+            const isNumberedListItem = /^\s*(\d+\.|[a-zA-Z]\.)\s+/.test(block);
+            let listItemText = block;
+
+            if (isBulletedListItem) {
+                listItemText = escapeHtml(block.replace(/^\s*([*\-•–—])\s+/, ''));
+                if (currentListType !== 'ul') { // Start new ul or close previous ol
+                    if (currentListType === 'ol') formattedHtml += `</ol>`;
+                    formattedHtml += `<ul>`;
+                    currentListType = 'ul';
+                }
+                listItemsHtml += `<li>${listItemText}</li>`;
+            } else if (isNumberedListItem) {
+                listItemText = escapeHtml(block.replace(/^\s*(\d+\.|[a-zA-Z]\.)\s+/, ''));
+                 if (currentListType !== 'ol') { // Start new ol or close previous ul
+                    if (currentListType === 'ul') formattedHtml += `</ul>`;
+                    formattedHtml += `<ol>`;
+                    currentListType = 'ol';
+                }
+                listItemsHtml += `<li>${listItemText}</li>`;
+            } else { // Not a list item, treat as a paragraph
+                if (currentListType) { // Close any open list
+                    formattedHtml += listItemsHtml; // Add collected list items
+                    formattedHtml += (currentListType === 'ul' ? `</ul>` : `</ol>`);
+                    listItemsHtml = '';
+                    currentListType = null;
+                }
+                // Escape and wrap in paragraph. Replace internal single newlines with <br> if any survived normalization.
+                formattedHtml += `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`;
+            }
+        });
+
+        if (currentListType) { // Close any trailing list
+            formattedHtml += listItemsHtml;
+            formattedHtml += (currentListType === 'ul' ? `</ul>` : `</ol>`);
+        }
+        
+        return formattedHtml || `<p class="text-gray-500 italic">Answer could not be formatted.</p>`;
+    }
+
+
+    if (askQuestionForm) {
+        askQuestionForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            if (!selectedDocumentId) {
+                showToast('Please select a document first.', 'warning');
+                if(answerContentDiv) answerContentDiv.innerHTML = '<p class="text-red-500 p-3">Please select a document.</p>'; return;
+            }
+            const question = questionInput.value.trim();
+            if (!question) {
+                showToast('Please enter a question.', 'warning');
+                if(answerContentDiv) answerContentDiv.innerHTML = '<p class="text-yellow-600 p-3">Please enter a question.</p>'; return;
+            }
+            if(askQuestionBtn) {askQuestionBtn.disabled = true; askQuestionBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';}
+            if(answerLoadingIndicator) answerLoadingIndicator.classList.remove('hidden');
+            if(answerContentDiv) {
+                answerContentDiv.innerHTML = ''; 
+                answerContentDiv.className = 'formatted-answer-content'; 
+            }
+
+            try {
+                const response = await fetch(`{{ url_for('api_document_ask_route', document_id='PLACEHOLDER_ID') }}`.replace('PLACEHOLDER_ID', selectedDocumentId), {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: question })
+                });
+                const result = await response.json();
+                
+                let fullAnswerHtml = '';
+
+                if (response.ok && result.status === 'success') {
+                    const answerText = result.answer_text || result.answer || "No answer found.";
+                    fullAnswerHtml += `<div class="p-1"><h4 class="font-semibold text-blue-700 mb-2 text-base">Answer:</h4>
+                                    ${formatAnswerTextToHtml(answerText)}`;
+                    if (typeof result.confidence === 'number') {
+                         fullAnswerHtml += `<p class="text-xs text-gray-500 mt-1">Confidence: ${escapeHtml(result.confidence.toFixed(2))}</p>`;
+                    }
+                    fullAnswerHtml += `</div>`;
+
+                    const contextText = result.context;
+                    if (contextText && typeof contextText === 'string' && contextText.trim() !== "") { 
+                        fullAnswerHtml += `<div class="mt-4">
+                                         <h5 class="font-medium text-gray-700 mb-2 text-base">Relevant Context from Document:</h5>
+                                         <div class="context-document-display">
+                                            ${escapeHtml(contextText)}
+                                         </div>
+                                     </div>`;
+                    } else if ((result.answer_text || result.answer || "").toLowerCase().includes("couldn't find a specific answer")) {
+                        // No context needed if answer already states it couldn't find.
+                    } else {
+                        fullAnswerHtml += `<p class="text-xs text-gray-500 mt-2 italic">No specific context was highlighted.</p>`;
+                    }
+                    if(answerContentDiv) {
+                        answerContentDiv.innerHTML = fullAnswerHtml;
+                    }
+
+                } else {
+                    const errorDetail = result.error || 'Could not get an answer.';
+                    if(answerContentDiv) {
+                        answerContentDiv.innerHTML = `<p class="text-red-600 p-3">Error: ${escapeHtml(errorDetail)}</p>`;
+                        answerContentDiv.className = 'text-red-600 p-3';
+                    }
+                    showToast(`Error getting answer: ${escapeHtml(errorDetail)}`, 'error');
+                }
+            } catch (error) {
+                console.error('Ask question error:', error);
+                const errorMsg = `An error occurred: ${escapeHtml(error.message)}. Check console.`;
+                if(answerContentDiv) {
+                    answerContentDiv.innerHTML = `<p class="text-red-600 p-3">${errorMsg}</p>`;
+                    answerContentDiv.className = 'text-red-600 p-3';
+                }
+                showToast(errorMsg, 'error');
+            } finally {
+                if(answerLoadingIndicator) answerLoadingIndicator.classList.add('hidden');
+                if(askQuestionBtn) {askQuestionBtn.disabled = false; askQuestionBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Ask';}
+            }
+        });
+    }
+    
+    fetchDocuments();
+    if (qaSection) qaSection.classList.add('hidden');
+    if (noDocSelectedMessage) noDocSelectedMessage.classList.remove('hidden');
+});
+</script>
+{% endblock %}

@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+
+{% block title %}Image Analyzer - Azure AI Mega Toolkit{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <h1 class="text-3xl font-bold text-blue-600 mb-6">Azure AI Image Analyzer</h1>
+    
+    <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+        <form id="imageAnalysisForm" class="space-y-6">
+            <div>
+                <label for="imageFile" class="block text-gray-700 font-semibold mb-2">Upload Image</label>
+                <input type="file" id="imageFile" name="imageFile" accept="image/jpeg,image/png,image/gif,image/bmp" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                <p class="text-sm text-gray-500 mt-1">Supported formats: JPG, PNG, BMP, GIF. Max size: 4MB.</p>
+            </div>
+            
+            <div id="imagePreviewContainer" class="hidden mt-4">
+                <label class="block text-gray-700 font-semibold mb-2">Image Preview</label>
+                <div class="border border-gray-300 rounded-md p-2 bg-gray-50 flex justify-center items-center max-h-96">
+                    <img id="imagePreview" class="max-h-80 max-w-full object-contain" alt="Image preview">
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-gray-700 font-semibold mb-2">Analysis Features</label>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <label class="inline-flex items-center p-2 border rounded-md hover:bg-gray-50 transition-colors">
+                        <input type="checkbox" name="description" value="true" class="form-checkbox text-blue-600 h-5 w-5" checked>
+                        <span class="ml-2 text-sm text-gray-700">Description</span>
+                    </label>
+                    <label class="inline-flex items-center p-2 border rounded-md hover:bg-gray-50 transition-colors">
+                        <input type="checkbox" name="tags" value="true" class="form-checkbox text-blue-600 h-5 w-5" checked>
+                        <span class="ml-2 text-sm text-gray-700">Tags</span>
+                    </label>
+                    <label class="inline-flex items-center p-2 border rounded-md hover:bg-gray-50 transition-colors">
+                        <input type="checkbox" name="objects" value="true" class="form-checkbox text-blue-600 h-5 w-5" checked>
+                        <span class="ml-2 text-sm text-gray-700">Objects</span>
+                    </label>
+                    <label class="inline-flex items-center p-2 border rounded-md hover:bg-gray-50 transition-colors">
+                        <input type="checkbox" name="faces" value="true" class="form-checkbox text-blue-600 h-5 w-5">
+                        <span class="ml-2 text-sm text-gray-700">Faces</span>
+                    </label>
+                    <label class="inline-flex items-center p-2 border rounded-md hover:bg-gray-50 transition-colors">
+                        <input type="checkbox" name="adult" value="true" class="form-checkbox text-blue-600 h-5 w-5">
+                        <span class="ml-2 text-sm text-gray-700">Adult Content</span>
+                    </label>
+                    <label class="inline-flex items-center p-2 border rounded-md hover:bg-gray-50 transition-colors">
+                        <input type="checkbox" name="brands" value="true" class="form-checkbox text-blue-600 h-5 w-5">
+                        <span class="ml-2 text-sm text-gray-700">Brands</span>
+                    </label>
+                    <label class="inline-flex items-center p-2 border rounded-md hover:bg-gray-50 transition-colors">
+                        <input type="checkbox" name="categories" value="true" class="form-checkbox text-blue-600 h-5 w-5" checked>
+                        <span class="ml-2 text-sm text-gray-700">Categories</span>
+                    </label>
+                    <label class="inline-flex items-center p-2 border rounded-md hover:bg-gray-50 transition-colors">
+                        <input type="checkbox" name="color" value="true" class="form-checkbox text-blue-600 h-5 w-5">
+                        <span class="ml-2 text-sm text-gray-700">Color Scheme</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="flex justify-center pt-4">
+                <button type="submit" id="analyzeBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95">
+                    <i class="fas fa-search-plus mr-2"></i>Analyze Image
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <div id="resultsSection" class="bg-white shadow-md rounded-lg p-6 mb-8 hidden">
+        <h2 class="text-2xl font-bold text-blue-600 mb-4">Analysis Results</h2>
+        <div id="loadingIndicator" class="text-center py-4 hidden">
+            <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-500 mx-auto"></div>
+            <p class="mt-3 text-gray-600">Analyzing your image, please wait...</p>
+        </div>
+        <div id="resultsContent" class="prose max-w-none"></div>
+    </div>
+    
+    <div class="bg-white shadow-md rounded-lg p-6">
+        <h2 class="text-2xl font-bold text-blue-600 mb-4">About Image Analysis</h2>
+        <p class="text-gray-700 mb-4">
+            The Azure AI Image Analyzer uses Azure Computer Vision to extract rich information from images. This powerful tool can help you:
+        </p>
+        <ul class="list-disc list-inside pl-6 space-y-2 text-gray-700 mb-4">
+            <li>Generate detailed captions describing image content (Description).</li>
+            <li>Identify relevant keywords associated with the image (Tags).</li>
+            <li>Detect and locate common objects within an image (Objects).</li>
+            <li>Find and analyze faces, including estimated age and gender (Faces).</li>
+            <li>Recognize commercial brands and logos (Brands).</li>
+            <li>Categorize the image content broadly (Categories).</li>
+            <li>Detect adult, racy, or gory content (Adult Content).</li>
+            <li>Analyze the dominant color scheme (Color Scheme).</li>
+        </ul>
+        <p class="text-gray-700">
+            Simply upload an image, select the analysis features you are interested in, and click "Analyze Image" to see the results.
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('imageAnalysisForm');
+        const imageFileInput = document.getElementById('imageFile');
+        const imagePreview = document.getElementById('imagePreview');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const resultsSection = document.getElementById('resultsSection');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const resultsContent = document.getElementById('resultsContent');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        
+        imageFileInput.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                const file = this.files[0];
+                // Basic client-side validation for file type and size
+                const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/bmp'];
+                if (!allowedTypes.includes(file.type)) {
+                    showError('Invalid file type. Please select a JPG, PNG, GIF, or BMP image.');
+                    this.value = ''; // Clear the input
+                    imagePreviewContainer.classList.add('hidden');
+                    return;
+                }
+                // Max size: 4MB (as per Azure Computer Vision typical limits)
+                if (file.size > 4 * 1024 * 1024) { 
+                    showError('File is too large. Maximum size is 4MB.');
+                    this.value = ''; // Clear the input
+                    imagePreviewContainer.classList.add('hidden');
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    imagePreview.src = e.target.result;
+                    imagePreviewContainer.classList.remove('hidden');
+                    resultsSection.classList.add('hidden'); // Hide previous results
+                    resultsContent.innerHTML = '';
+                };
+                reader.readAsDataURL(file);
+            } else {
+                imagePreviewContainer.classList.add('hidden');
+            }
+        });
+        
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!imageFileInput.files || imageFileInput.files.length === 0) {
+                showError('Please select an image file.');
+                return;
+            }
+            
+            const selectedFeatures = Array.from(form.querySelectorAll('input[type="checkbox"]:checked'))
+                                         .map(cb => cb.name);
+            if (selectedFeatures.length === 0) {
+                showError('Please select at least one analysis feature.');
+                return;
+            }
+
+            resultsSection.classList.remove('hidden');
+            loadingIndicator.classList.remove('hidden');
+            resultsContent.innerHTML = '';
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyzing...';
+            
+            const formData = new FormData(form); // FormData will include checked checkboxes by their 'name'
+            
+            try {
+                const response = await fetch("{{ url_for('analyze_image_api') }}", { // Corrected endpoint
+                    method: 'POST',
+                    body: formData
+                    // Content-Type is automatically set by browser for FormData
+                });
+                
+                if (!response.ok) {
+                    let errorMsg = `Error ${response.status}: ${response.statusText}`;
+                    try {
+                        const errData = await response.json();
+                        errorMsg = errData.error || errorMsg;
+                    } catch (jsonError) {
+                        // If parsing error JSON fails, use the status text
+                    }
+                    throw new Error(errorMsg);
+                }
+
+                const result = await response.json();
+                
+                if (result.status === 'success' && result.analysis) {
+                    displayResults(result);
+                } else {
+                    showError(result.error || 'An unexpected error occurred while analyzing the image.');
+                }
+            } catch (error) {
+                console.error('Analysis Error:', error);
+                showError(error.message || 'An error occurred. Please check the console.');
+            } finally {
+                loadingIndicator.classList.add('hidden');
+                analyzeBtn.disabled = false;
+                analyzeBtn.innerHTML = '<i class="fas fa-search-plus mr-2"></i>Analyze Image';
+            }
+        });
+        
+        function showError(message) {
+            loadingIndicator.classList.add('hidden'); // Ensure loading is hidden
+            resultsContent.innerHTML = `
+                <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
+                    <p class="font-bold">Error</p>
+                    <p>${escapeHtml(message)}</p>
+                </div>
+            `;
+            resultsSection.classList.remove('hidden'); // Ensure results section is visible to show error
+        }
+
+        function escapeHtml(unsafe) {
+            if (typeof unsafe !== 'string') {
+                if (unsafe === null || typeof unsafe === 'undefined') return '';
+                try { return String(unsafe); } catch (e) { return '';}
+            }
+            return unsafe
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+        
+        function displayResults(result) {
+            const analysis = result.analysis;
+            let html = `<div class="space-y-6">`;
+            
+            if (result.filename) {
+                html += `<p class="mb-4 text-sm text-gray-600"><strong>Analyzed File:</strong> ${escapeHtml(result.filename)}</p><hr class="mb-4">`;
+            }
+            
+            if (analysis.description && analysis.description.captions && analysis.description.captions.length > 0) {
+                html += `<div class="p-4 border rounded-lg bg-gray-50">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2"><i class="fas fa-closed-captioning mr-2 text-indigo-500"></i>Description (Caption)</h3>
+                    <p class="text-gray-800">${escapeHtml(analysis.description.captions[0].text)}</p>
+                    <p class="text-xs text-gray-500 mt-1">Confidence: ${(analysis.description.captions[0].confidence * 100).toFixed(1)}%</p>
+                </div>`;
+            }
+            
+            if (analysis.tags && analysis.tags.length > 0) {
+                html += `<div class="p-4 border rounded-lg bg-gray-50">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3"><i class="fas fa-tags mr-2 text-teal-500"></i>Tags</h3>
+                    <div class="flex flex-wrap gap-2">`;
+                analysis.tags.forEach(tag => {
+                    html += `<span class="bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-xs font-medium" title="Confidence: ${(tag.confidence * 100).toFixed(1)}%">
+                        ${escapeHtml(tag.name)}
+                    </span>`;
+                });
+                html += `</div></div>`;
+            }
+            
+            if (analysis.objects && analysis.objects.length > 0) {
+                html += `<div class="p-4 border rounded-lg bg-gray-50">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3"><i class="fas fa-cube mr-2 text-purple-500"></i>Objects Detected</h3>
+                    <ul class="list-disc pl-5 space-y-1 text-sm">`;
+                analysis.objects.forEach(obj => {
+                    html += `<li>
+                        <strong>${escapeHtml(obj.object || obj.object_property)}:</strong> 
+                        Confidence ${ (obj.confidence * 100).toFixed(1)}%
+                        (Location: x=${obj.rectangle.x}, y=${obj.rectangle.y}, w=${obj.rectangle.w}, h=${obj.rectangle.h})
+                    </li>`;
+                });
+                html += `</ul></div>`;
+            }
+            
+            if (analysis.faces && analysis.faces.length > 0) {
+                html += `<div class="p-4 border rounded-lg bg-gray-50">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3"><i class="fas fa-smile mr-2 text-pink-500"></i>Faces Detected</h3>
+                    <ul class="list-disc pl-5 space-y-1 text-sm">`;
+                analysis.faces.forEach((face, index) => {
+                    html += `<li>
+                        <strong>Face ${index + 1}:</strong> 
+                        Age: ${escapeHtml(face.age)}, Gender: ${escapeHtml(face.gender)}
+                        (Location: x=${face.face_rectangle.left}, y=${face.face_rectangle.top}, w=${face.face_rectangle.width}, h=${face.face_rectangle.height})
+                    </li>`;
+                });
+                html += `</ul></div>`;
+            }
+            
+            if (analysis.adult) { // Renamed from adult_content for consistency with Vision SDK
+                html += `<div class="p-4 border rounded-lg bg-gray-50">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2"><i class="fas fa-exclamation-triangle mr-2 text-red-500"></i>Adult Content Analysis</h3>
+                    <p class="text-sm">Adult Content: <strong>${analysis.adult.is_adult_content ? 'Detected' : 'Not detected'}</strong> (Score: ${(analysis.adult.adult_score * 100).toFixed(1)}%)</p>
+                    <p class="text-sm">Racy Content: <strong>${analysis.adult.is_racy_content ? 'Detected' : 'Not detected'}</strong> (Score: ${(analysis.adult.racy_score * 100).toFixed(1)}%)</p>
+                    ${analysis.adult.is_gory_content ? `<p class="text-sm">Gory Content: <strong>Detected</strong> (Score: ${(analysis.adult.gory_score * 100).toFixed(1)}%)</p>` : ''}
+                </div>`;
+            }
+            
+            if (analysis.brands && analysis.brands.length > 0) {
+                html += `<div class="p-4 border rounded-lg bg-gray-50">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3"><i class="fas fa-copyright mr-2 text-gray-500"></i>Brands Detected</h3>
+                    <ul class="list-disc pl-5 space-y-1 text-sm">`;
+                analysis.brands.forEach(brand => {
+                    html += `<li>
+                        <strong>${escapeHtml(brand.name)}:</strong> Confidence ${(brand.confidence * 100).toFixed(1)}%
+                        (Location: x=${brand.rectangle.x}, y=${brand.rectangle.y}, w=${brand.rectangle.w}, h=${brand.rectangle.h})
+                    </li>`;
+                });
+                html += `</ul></div>`;
+            }
+
+            if (analysis.categories && analysis.categories.length > 0) {
+                html += `<div class="p-4 border rounded-lg bg-gray-50">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3"><i class="fas fa-sitemap mr-2 text-green-500"></i>Categories</h3>
+                    <ul class="list-disc pl-5 space-y-1 text-sm">`;
+                analysis.categories.forEach(category => {
+                    let detailHtml = "";
+                    if (category.detail && category.detail.celebrities && category.detail.celebrities.length > 0) {
+                        detailHtml += ` Celebrities: ${category.detail.celebrities.map(c => escapeHtml(c.name)).join(', ')}.`;
+                    }
+                    if (category.detail && category.detail.landmarks && category.detail.landmarks.length > 0) {
+                        detailHtml += ` Landmarks: ${category.detail.landmarks.map(l => escapeHtml(l.name)).join(', ')}.`;
+                    }
+                    html += `<li>
+                        <strong>${escapeHtml(category.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()))}:</strong> 
+                        Score ${(category.score * 100).toFixed(1)}%
+                        ${detailHtml ? `<span class="text-xs text-gray-600 block pl-2">${detailHtml}</span>` : ''}
+                    </li>`;
+                });
+                html += `</ul></div>`;
+            }
+
+             if (analysis.color) {
+                html += `<div class="p-4 border rounded-lg bg-gray-50">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2"><i class="fas fa-palette mr-2 text-orange-500"></i>Color Scheme</h3>
+                    <p class="text-sm">Dominant Foreground: <span style="color:${escapeHtml(analysis.color.dominant_color_foreground)}; background-color: ${analysis.color.dominant_color_foreground === 'White' ? '#ccc' : 'transparent'}; padding: 0 3px;">${escapeHtml(analysis.color.dominant_color_foreground)}</span></p>
+                    <p class="text-sm">Dominant Background: <span style="color:${escapeHtml(analysis.color.dominant_color_background)}; background-color: ${analysis.color.dominant_color_background === 'White' ? '#ccc' : 'transparent'}; padding: 0 3px;">${escapeHtml(analysis.color.dominant_color_background)}</span></p>
+                    <p class="text-sm">Accent Color: <span style="color:#${escapeHtml(analysis.color.accent_color)}; background-color:#${escapeHtml(analysis.color.accent_color)}; padding: 0 3px; color: transparent;">#${escapeHtml(analysis.color.accent_color)}</span> (#${escapeHtml(analysis.color.accent_color)})</p>
+                    <p class="text-sm">Is B&W: ${analysis.color.is_bw_img ? 'Yes' : 'No'}</p>
+                    <div class="flex flex-wrap gap-1 mt-2">Dominant Colors: ${analysis.color.dominant_colors.map(c => `<span style="background-color:${escapeHtml(c)}; color:${escapeHtml(c)};" class="inline-block w-4 h-4 rounded border border-gray-300" title="${escapeHtml(c)}"></span>`).join('')}</div>
+                </div>`;
+            }
+            
+            html += '</div>'; // Close space-y-6
+            if (html.includes('<h3')) { // Check if any actual content was added
+                 resultsContent.innerHTML = html;
+            } else {
+                 resultsContent.innerHTML = '<p class="text-gray-600">No results to display for the selected features or the image.</p>';
+            }
+        }
+    });
+</script>
+{% endblock %}

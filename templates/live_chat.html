@@ -1,0 +1,868 @@
+{% extends "base.html" %}
+
+{% block title %}Live Chat - Azure AI Mega Toolkit{% endblock %}
+
+{% block styles %}
+<style>
+    /* Custom scrollbar for chat messages and other elements */
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f9fafb; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+    .chat-bubble {
+        max-width: 75%;
+        padding: 0.5rem 1rem;
+        border-radius: 1rem;
+        margin-bottom: 0.5rem;
+        word-wrap: break-word;
+    }
+    .chat-bubble-user {
+        background-color: #3B82F6; /* Tailwind blue-500 */
+        color: white;
+        margin-left: auto;
+        border-bottom-right-radius: 0.25rem;
+    }
+    .chat-bubble-other {
+        background-color: #E5E7EB; /* Tailwind gray-200 */
+        color: #1F2937; /* Tailwind gray-800 */
+        margin-right: auto;
+        border-bottom-left-radius: 0.25rem;
+    }
+    .chat-meta {
+        font-size: 0.75rem;
+        color: #6B7280; /* Tailwind gray-500 */
+        margin-top: 0.25rem;
+    }
+    .chat-bubble-other .chat-meta {
+        text-align: left;
+    }
+    .chat-bubble-user .chat-meta {
+        text-align: right;
+        color: #D1D5DB; /* Lighter for dark bubble */
+    }
+    #chatMessages {
+        height: calc(100vh - 350px); 
+        min-height: 250px; 
+    }
+    .typing-indicator span { 
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        margin: 0 2px;
+        background-color: #9CA3AF; 
+        border-radius: 50%;
+        animation: typing-bounce 1.4s infinite ease-in-out both;
+    }
+    .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+    .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes typing-bounce {
+        0%, 80%, 100% { transform: scale(0); }
+        40% { transform: scale(1.0); }
+    }
+    .input-method-toggle button {
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #D1D5DB;
+        transition: all 0.2s ease-in-out;
+    }
+    .input-method-toggle button.active {
+        background-color: #3B82F6; 
+        color: white;
+        border-color: #3B82F6; 
+    }
+    .input-method-toggle button:not(.active):hover {
+        background-color: #F3F4F6; 
+    }
+    #recordBtn.recording {
+        background-color: #EF4444; /* red-500 */
+    }
+    #recordBtn.recording:hover {
+        background-color: #DC2626; /* red-600 */
+    }
+    
+    #toast-container {
+        position: fixed; top: 1.25rem; right: 1.25rem; z-index: 9999;
+        width: 100%; max-width: 20rem; /* Tailwind sm:max-w-sm */
+        display: flex; flex-direction: column; gap: 0.5rem; /* space-y-2 */
+    }
+    .toast-message {
+        transform: translateX(100%);
+        opacity: 0;
+        transition: all 0.3s ease-out;
+    }
+    .toast-message.show {
+        transform: translateX(0);
+        opacity: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="toast-container"></div>
+
+<div class="max-w-5xl mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold text-blue-700 mb-6 text-center">Live Transcription & Translation Chat</h1>
+
+    <div class="grid md:grid-cols-3 gap-6">
+        <div class="md:col-span-1 bg-white p-6 rounded-lg shadow-xl">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Settings</h2>
+            <form id="chatSettingsForm" class="space-y-4">
+                <div>
+                    <label for="userName" class="block text-sm font-medium text-gray-700">Your Name</label>
+                    <input type="text" id="userName" name="userName" value="{{ current_user.username if current_user.is_authenticated else 'Guest' }}" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
+                </div>
+                <div>
+                    <label for="roomName" class="block text-sm font-medium text-gray-700">Room Name</label>
+                    <input type="text" id="roomName" name="roomName" value="general" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" required>
+                </div>
+                <div>
+                    <label for="translationLanguage" class="block text-sm font-medium text-gray-700">Translate My Messages To</label>
+                    <select id="translationLanguage" name="translationLanguage" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <option value="">No Translation</option>
+                        <option value="en">English</option>
+                        <option value="es">Spanish</option>
+                        <option value="fr">French</option>
+                        <option value="de">German</option>
+                        <option value="it">Italian</option>
+                        <option value="ja">Japanese</option>
+                        <option value="ko">Korean</option>
+                        <option value="pt">Portuguese</option>
+                        <option value="ru">Russian</option>
+                        <option value="zh-Hans">Chinese (Simplified)</option>
+                        <option value="hi">Hindi</option>
+                        <option value="ar">Arabic</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="speechLanguage" class="block text-sm font-medium text-gray-700">My Speech Language (for Mic Input)</label>
+                    <select id="speechLanguage" name="speechLanguage" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <option value="en-US">English (US)</option>
+                        <option value="es-ES">Spanish (Spain)</option>
+                        <option value="fr-FR">French (France)</option>
+                        <option value="de-DE">German (Germany)</option>
+                        <option value="it-IT">Italian (Italy)</option>
+                        <option value="ja-JP">Japanese (Japan)</option>
+                        <option value="ko-KR">Korean (Korea)</option>
+                        <option value="pt-BR">Portuguese (Brazil)</option>
+                        <option value="ru-RU">Russian (Russia)</option>
+                        <option value="zh-CN">Chinese (Mandarin, Simplified)</option>
+                        <option value="hi-IN">Hindi (India)</option>
+                        <option value="ar-AE">Arabic (UAE)</option>
+                    </select>
+                </div>
+                <div class="pt-2">
+                    <button type="submit" id="joinRoomBtn" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95">
+                        Join Room
+                    </button>
+                    <button type="button" id="leaveRoomBtn" class="hidden w-full mt-2 flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        Leave Room
+                    </button>
+                </div>
+            </form>
+            <div id="speechSDKStatus" class="mt-4 text-xs text-gray-500">Speech SDK status: <span id="sdkStatusText" class="font-semibold">Initializing...</span></div>
+            <div class="mt-6 pt-4 border-t">
+                <h3 class="text-md font-semibold text-gray-700 mb-2">Instructions:</h3>
+                <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
+                    <li>Enter your name and a room name.</li>
+                    <li>Select language to translate your messages into (optional).</li>
+                    <li>Select your speech language if using microphone.</li>
+                    <li>Click "Join Room" to connect.</li>
+                    <li>Use <i class="fas fa-keyboard"></i> for text or <i class="fas fa-microphone"></i> for speech.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="md:col-span-2 bg-white p-6 rounded-lg shadow-xl flex flex-col">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h2 class="text-xl font-semibold text-gray-800">Chat Room: <span id="currentRoomName" class="text-blue-600">Not Joined</span></h2>
+                <div id="connectionStatus" class="text-sm text-gray-500 flex items-center">
+                    <span class="h-3 w-3 bg-red-500 rounded-full mr-2 inline-block" id="statusIndicator"></span>
+                    <span id="statusText">Disconnected</span>
+                </div>
+            </div>
+
+            <div id="chatMessages" class="flex-grow overflow-y-auto mb-4 p-3 border rounded-md bg-gray-50 custom-scrollbar">
+                <p class="text-center text-gray-500 py-4">Join a room to start chatting.</p>
+            </div>
+
+            <div id="typingIndicator" class="text-sm text-gray-500 h-5 mb-1 hidden">
+                <span class="typing-indicator"><span></span><span></span><span></span></span> <em id="typingUser">User</em> is typing...
+            </div>
+            
+            <div id="chatInputArea" class="mt-auto opacity-50 pointer-events-none"> 
+                <div class="flex items-center space-x-2 mb-2">
+                    <div class="input-method-toggle flex rounded-md overflow-hidden">
+                        <button id="textInputBtn" title="Text Input" class="px-3 py-2 bg-gray-200 hover:bg-gray-300 focus:outline-none"><i class="fas fa-keyboard"></i></button>
+                        <button id="micInputBtn" title="Microphone Input" class="px-3 py-2 bg-gray-200 hover:bg-gray-300 focus:outline-none" disabled><i class="fas fa-microphone"></i></button>
+                    </div>
+                    <p id="micStatus" class="text-sm text-gray-600 flex-grow hidden items-center"><i class="fas fa-info-circle mr-2"></i>Mic status will appear here.</p>
+                </div>
+
+                <form id="messageForm" class="flex items-center">
+                    <textarea id="messageInput" placeholder="Type your message..." rows="1" class="flex-grow p-2.5 border border-gray-300 rounded-l-md focus:ring-blue-500 focus:border-blue-500 resize-none text-sm" disabled></textarea>
+                    <button type="submit" id="sendMessageBtn" class="bg-blue-600 text-white p-2.5 rounded-r-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors duration-150" disabled>
+                        <i class="fas fa-paper-plane"></i>
+                        <span class="sr-only">Send</span>
+                    </button>
+                </form>
+                 <button id="recordBtn" class="hidden w-full mt-2 bg-blue-500 text-white p-2.5 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors duration-150" disabled>
+                    <i class="fas fa-microphone-alt mr-2"></i>Start Recording
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk@latest/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle.js" defer></script>
+<script>
+    (function() {
+        // --- START: State Variables ---
+        let speechSDKLoaded = false;
+        let speechRecognizer = null;
+        let currentSpeechConfigProps = null; 
+        let isRecording = false;
+        let speechSubscriptionKey = null;
+        let speechRecognitionRegion = null;
+        let typingTimer;
+        let socket; 
+        let currentInputMethod = 'text';
+        // --- END: State Variables ---
+
+        // --- START: DOM Element Cache Variables ---
+        let sdkStatusText, micInputBtn, recordBtn, chatSettingsForm, userNameInput, roomNameInput,
+            translationLanguageSelect, speechLanguageSelect, joinRoomBtn, leaveRoomBtn,
+            currentRoomNameSpan, statusIndicator, statusTextElem, chatInputArea, messageForm,
+            messageInput, sendMessageBtn, chatMessagesDiv, typingIndicatorDiv, typingUserSpan,
+            textInputBtn, micStatusP;
+        // --- END: DOM Element Cache Variables ---
+
+        // Function to cache DOM elements once the document is loaded
+        function cacheDOMElements() {
+            sdkStatusText = document.getElementById('sdkStatusText');
+            micInputBtn = document.getElementById('micInputBtn');
+            recordBtn = document.getElementById('recordBtn');
+            chatSettingsForm = document.getElementById('chatSettingsForm');
+            userNameInput = document.getElementById('userName');
+            roomNameInput = document.getElementById('roomName');
+            translationLanguageSelect = document.getElementById('translationLanguage');
+            speechLanguageSelect = document.getElementById('speechLanguage');
+            joinRoomBtn = document.getElementById('joinRoomBtn');
+            leaveRoomBtn = document.getElementById('leaveRoomBtn');
+            currentRoomNameSpan = document.getElementById('currentRoomName');
+            statusIndicator = document.getElementById('statusIndicator');
+            statusTextElem = document.getElementById('statusText');
+            chatInputArea = document.getElementById('chatInputArea');
+            messageForm = document.getElementById('messageForm');
+            messageInput = document.getElementById('messageInput');
+            sendMessageBtn = document.getElementById('sendMessageBtn');
+            chatMessagesDiv = document.getElementById('chatMessages');
+            typingIndicatorDiv = document.getElementById('typingIndicator');
+            typingUserSpan = document.getElementById('typingUser');
+            textInputBtn = document.getElementById('textInputBtn');
+            micStatusP = document.getElementById('micStatus');
+            console.log("DOM elements cached for Live Chat.");
+        }
+        
+        // --- START: Utility Functions (escapeHtml, appendChatMessage, etc.) ---
+        function escapeHtml(unsafe) {
+            if (typeof unsafe !== 'string') {
+                if (unsafe === null || typeof unsafe === 'undefined') return '';
+                try { return String(unsafe); } catch (e) { return ''; }
+            }
+            return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function appendChatMessage(user, text, originalText, originalLangName, translatedToLangName, timestamp, isCurrentUser) {
+            if (!chatMessagesDiv) { console.error("chatMessagesDiv not defined for appendChatMessage."); return; }
+            const initialMsg = chatMessagesDiv.querySelector('p.text-center.text-gray-500.py-4');
+            if (initialMsg) initialMsg.remove();
+
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('chat-bubble', isCurrentUser ? 'chat-bubble-user' : 'chat-bubble-other');
+            
+            let messageHtml = `<div class="font-semibold text-sm">${escapeHtml(user)}</div>`;
+            messageHtml += `<p class="text-sm">${escapeHtml(text)}</p>`; // Main text (should be translated if applicable)
+
+            if (originalText && originalText.trim().toLowerCase() !== text.trim().toLowerCase()) { 
+                let originalDisplayLabel = `Original`;
+                if (originalLangName) { 
+                    originalDisplayLabel += ` (${escapeHtml(getLangName(originalLangName))})`;
+                }
+                messageHtml += `<p class="text-xs italic mt-1 opacity-75">${originalDisplayLabel}: ${escapeHtml(originalText)}</p>`;
+            }
+            
+            const date = new Date(timestamp);
+            messageHtml += `<div class="chat-meta">${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>`;
+            
+            messageElement.innerHTML = messageHtml;
+            chatMessagesDiv.appendChild(messageElement);
+            chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+        }
+
+        function appendSystemMessage(message, type = 'info', uniqueId = null) {
+            if (!chatMessagesDiv) { console.error("chatMessagesDiv is not available for appendSystemMessage."); return; }
+            const initialJoinMessage = chatMessagesDiv.querySelector('p.text-center.text-gray-500.py-4');
+            if (initialJoinMessage && initialJoinMessage.textContent.includes("Join a room to start chatting")) {
+                initialJoinMessage.remove();
+            }
+            
+            if (uniqueId) { 
+                const existingMsgEl = document.getElementById(uniqueId);
+                if (existingMsgEl) { 
+                     let iconHtml = '';
+                    if (type === 'success') { existingMsgEl.className = 'text-xs text-center my-1 py-1 px-2 rounded-md mx-auto max-w-md break-words bg-green-100 text-green-700'; iconHtml = '<i class="fas fa-check-circle mr-1"></i>'; }
+                    else if (type === 'error') { existingMsgEl.className = 'text-xs text-center my-1 py-1 px-2 rounded-md mx-auto max-w-md break-words bg-red-100 text-red-700'; iconHtml = '<i class="fas fa-exclamation-triangle mr-1"></i>'; }
+                    else if (type === 'warning') { existingMsgEl.className = 'text-xs text-center my-1 py-1 px-2 rounded-md mx-auto max-w-md break-words bg-yellow-100 text-yellow-700'; iconHtml = '<i class="fas fa-exclamation-circle mr-1"></i>'; }
+                    else { existingMsgEl.className = 'text-xs text-center my-1 py-1 px-2 rounded-md mx-auto max-w-md break-words bg-gray-200 text-gray-600'; iconHtml = '<i class="fas fa-info-circle mr-1"></i>'; }
+                    existingMsgEl.innerHTML = `${iconHtml} ${escapeHtml(message)}`;
+                    return; 
+                }
+            }
+
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('text-xs', 'text-center', 'my-1', 'py-1', 'px-2', 'rounded-md', 'mx-auto', 'max-w-md', 'break-words');
+            if (uniqueId) messageElement.id = uniqueId; 
+            let iconHtml = '';
+            if (type === 'success') { messageElement.classList.add('bg-green-100', 'text-green-700'); iconHtml = '<i class="fas fa-check-circle mr-1"></i>'; }
+            else if (type === 'error') { messageElement.classList.add('bg-red-100', 'text-red-700'); iconHtml = '<i class="fas fa-exclamation-triangle mr-1"></i>'; }
+            else if (type === 'warning') { messageElement.classList.add('bg-yellow-100', 'text-yellow-700'); iconHtml = '<i class="fas fa-exclamation-circle mr-1"></i>'; }
+            else { messageElement.classList.add('bg-gray-200', 'text-gray-600'); iconHtml = '<i class="fas fa-info-circle mr-1"></i>'; }
+            messageElement.innerHTML = `${iconHtml} ${escapeHtml(message)}`;
+            chatMessagesDiv.appendChild(messageElement);
+            chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+        }
+
+        function showToast(message, type = 'info', duration = 3000) {
+            const toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) { console.warn("Toast container not found"); return; }
+            const toastId = `toast-${Date.now()}`;
+            const toast = document.createElement('div');
+            toast.id = toastId;
+            toast.className = 'toast-message max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden mb-2';
+            let iconHtml = '', titleColor = 'text-gray-900', bgColor = 'bg-white';
+            if (type === 'success') { iconHtml = '<i class="fas fa-check-circle text-green-500"></i>'; titleColor = 'text-green-700'; bgColor = 'bg-green-50';}
+            else if (type === 'error') { iconHtml = '<i class="fas fa-times-circle text-red-500"></i>'; titleColor = 'text-red-700'; bgColor = 'bg-red-50';}
+            else if (type === 'warning') { iconHtml = '<i class="fas fa-exclamation-triangle text-yellow-500"></i>'; titleColor = 'text-yellow-700'; bgColor = 'bg-yellow-50';}
+            else { iconHtml = '<i class="fas fa-info-circle text-blue-500"></i>'; titleColor = 'text-blue-700'; bgColor = 'bg-blue-50';}
+            toast.innerHTML = `<div class="p-4 ${bgColor}"><div class="flex items-start"><div class="flex-shrink-0 pt-0.5">${iconHtml}</div><div class="ml-3 w-0 flex-1"><p class="text-sm font-medium ${titleColor}">${type.charAt(0).toUpperCase() + type.slice(1)}</p><p class="mt-1 text-sm text-gray-600">${escapeHtml(message)}</p></div><div class="ml-4 flex-shrink-0 flex"><button type="button" class="inline-flex rounded-md bg-transparent text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" onclick="document.getElementById('${toastId}').remove()"><span class="sr-only">Close</span> <i class="fas fa-times"></i></button></div></div></div>`;
+            toastContainer.prepend(toast);
+            requestAnimationFrame(() => { toast.classList.add('show'); });
+            setTimeout(() => { if (document.getElementById(toastId)) { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); } }, duration);
+        }
+        // --- END: Utility Functions ---
+
+        // --- START: Speech SDK Related Functions ---
+        function updateSDKStatusDisplay(statusKey, message = null) {
+            console.log(`Updating SDK status display: Key='${statusKey}', Message='${message || 'No message'}'`);
+            if (!sdkStatusText) { console.warn("sdkStatusText element not found for update."); return; }
+
+            const statuses = {
+                initializing: { text: "Initializing...", class: "text-yellow-600 font-semibold", micDisabled: true },
+                loading_script: { text: "Loading SDK script...", class: "text-yellow-600 font-semibold", micDisabled: true },
+                script_load_error: { text: message || "SDK script load error. Check network/console.", class: "text-red-600 font-semibold", micDisabled: true },
+                awaiting_connection: { text: "SDK loaded, awaiting connection for mic init.", class: "text-yellow-600 font-semibold", micDisabled: true },
+                fetching_creds: { text: "Fetching credentials...", class: "text-yellow-600 font-semibold", micDisabled: true },
+                cred_error: { text: message || "Credential error.", class: "text-red-600 font-semibold", micDisabled: true },
+                ready: { text: "Ready", class: "text-green-600 font-semibold", micDisabled: false },
+                failed: { text: message || "SDK setup failed.", class: "text-red-600 font-semibold", micDisabled: true }
+            };
+
+            const currentStatus = statuses[statusKey] || statuses.failed;
+            sdkStatusText.textContent = currentStatus.text;
+            sdkStatusText.className = currentStatus.class;
+
+            if (micInputBtn) micInputBtn.disabled = currentStatus.micDisabled || !socket.connected;
+            if (recordBtn) recordBtn.disabled = currentStatus.micDisabled || !socket.connected;
+            
+            const sdkErrorMsgId = 'system-message-sdk-error';
+            if (statusKey.includes("error") || statusKey === "failed") {
+                appendSystemMessage(currentStatus.text, "error", sdkErrorMsgId);
+            } else {
+                const existingErrorMsg = document.getElementById(sdkErrorMsgId);
+                if(existingErrorMsg) existingErrorMsg.remove();
+            }
+            console.log(`SDK Status set to: ${currentStatus.text}. Mic button disabled: ${micInputBtn ? micInputBtn.disabled : 'N/A'}`);
+        }
+        
+        function isSpeechSDKAvailable() {
+            return typeof SpeechSDK !== 'undefined' && SpeechSDK !== null && typeof SpeechSDK.SpeechConfig !== 'undefined';
+        }
+
+        function ensureSpeechSDK(callback, attempts = 20, interval = 500) {
+            console.log(`ensureSpeechSDK: Attempt ${21 - attempts}. SDK object 'SpeechSDK' available: ${typeof SpeechSDK !== 'undefined'}`);
+            if (isSpeechSDKAvailable()) {
+                console.log("ensureSpeechSDK: SpeechSDK object is now available.");
+                speechSDKLoaded = true; 
+                if (callback) callback();
+            } else if (attempts > 0) {
+                setTimeout(() => ensureSpeechSDK(callback, attempts - 1, interval), interval);
+            } else {
+                console.error("ensureSpeechSDK: SpeechSDK object failed to become available after multiple attempts.");
+                speechSDKLoaded = false;
+                updateSDKStatusDisplay("script_load_error", "Speech SDK script failed to load (timeout). Microphone input will be unavailable. Please check your network connection and browser console for errors related to the SDK script URL (currently: cdn.jsdelivr.net).");
+            }
+        }
+        // --- END: Speech SDK Related Functions ---
+        
+        // --- START: Main DOMContentLoaded and Event Setup ---
+        document.addEventListener('DOMContentLoaded', function () {
+            cacheDOMElements();
+            updateSDKStatusDisplay("initializing"); 
+            socket = io({ autoConnect: false, transports: ['websocket', 'polling'] }); 
+            
+            const sdkScriptTag = document.querySelector('script[src*="microsoft.cognitiveservices.speech.sdk.bundle.js"]');
+            if (sdkScriptTag) {
+                console.log("Speech SDK script tag found. Setting up load/error handlers for:", sdkScriptTag.src);
+                sdkScriptTag.onload = () => {
+                    console.log("Speech SDK script 'load' event fired by browser.");
+                    ensureSpeechSDK(() => { 
+                        console.log("SpeechSDK confirmed available after script load event.");
+                        if (socket && socket.connected) {
+                            fetchSpeechCredentialsAndInitialize();
+                        } else {
+                            updateSDKStatusDisplay("awaiting_connection");
+                        }
+                    });
+                };
+                sdkScriptTag.onerror = (event) => {
+                    console.error("Speech SDK script 'error' event fired by browser. Source:", event.target.src, "Error event:", event);
+                    speechSDKLoaded = false;
+                    updateSDKStatusDisplay("script_load_error", "Speech SDK script could not be loaded. Check network and browser console for details regarding the jsDelivr CDN link.");
+                };
+                if (isSpeechSDKAvailable()) {
+                     console.log("SpeechSDK was already available on DOMContentLoaded.");
+                     ensureSpeechSDK(() => {
+                        if (socket && socket.connected) fetchSpeechCredentialsAndInitialize();
+                        else updateSDKStatusDisplay("awaiting_connection");
+                     });
+                } else {
+                    console.log("SpeechSDK not immediately available, waiting for script load event or ensureSpeechSDK polling.");
+                    updateSDKStatusDisplay("loading_script"); 
+                }
+            } else {
+                console.error("Speech SDK script tag (cdn.jsdelivr.net) not found in the document.");
+                updateSDKStatusDisplay("script_load_error", "Speech SDK script tag missing. Mic disabled.");
+            }
+            
+            textInputBtn.addEventListener('click', () => switchInputMethod('text'));
+            micInputBtn.addEventListener('click', () => {
+                if (speechSDKLoaded && isSpeechSDKAvailable() && speechSubscriptionKey && speechRecognitionRegion) {
+                    switchInputMethod('speech');
+                } else {
+                    showToast("Microphone input unavailable: SDK not ready or credentials missing.", "error");
+                    fetchSpeechCredentialsAndInitialize(); 
+                }
+            });
+            chatSettingsForm.addEventListener('submit', handleJoinRoomSubmit);
+            leaveRoomBtn.addEventListener('click', handleLeaveRoom);
+            messageForm.addEventListener('submit', handleMessageSubmit);
+            messageInput.addEventListener('input', handleTyping);
+            recordBtn.addEventListener('click', handleRecordButtonClick);
+            
+            setupSocketListeners();
+            switchInputMethod('text'); 
+            if (micInputBtn) micInputBtn.disabled = true; 
+            if (recordBtn) recordBtn.disabled = true;
+        });
+        // --- END: Main DOMContentLoaded and Event Setup ---
+
+        // --- START: Socket.IO Event Handlers ---
+        function setupSocketListeners() {
+            socket.on('connect', () => { 
+                console.log("CLIENT: Socket connected! SID:", socket.id);
+                statusIndicator.classList.replace('bg-red-500', 'bg-green-500');
+                statusTextElem.textContent = ' Connected';
+                chatInputArea.classList.remove('opacity-50', 'pointer-events-none');
+                messageInput.disabled = false; sendMessageBtn.disabled = false;
+                
+                // Emit join_room after connection is confirmed
+                const user = userNameInput.value.trim();
+                const room = roomNameInput.value.trim();
+                if (user && room) {
+                    console.log(`CLIENT: Emitting 'join_room' for room: ${room}, user: ${user}`);
+                    socket.emit('join_room', { user: user, room: room });
+                } else {
+                    console.warn("CLIENT: Cannot join room, user or room name is empty on connect.");
+                }
+                
+                appendSystemMessage(`Connected to room: ${escapeHtml(roomNameInput.value)}`, 'success');
+                if (speechSDKLoaded && isSpeechSDKAvailable()) { 
+                    fetchSpeechCredentialsAndInitialize();
+                } else if (!speechSDKLoaded) {
+                     updateSDKStatusDisplay("loading_script", "Connected, but still waiting for SDK script...");
+                } else { 
+                    updateSDKStatusDisplay("fetching_creds");
+                    fetchSpeechCredentialsAndInitialize();
+                }
+            });
+            socket.on('disconnect', (reason) => { 
+                console.log("CLIENT: Socket disconnected. Reason:", reason);
+                statusIndicator.classList.replace('bg-green-500', 'bg-red-500');
+                statusTextElem.textContent = ' Disconnected';
+                chatInputArea.classList.add('opacity-50', 'pointer-events-none');
+                messageInput.disabled = true; sendMessageBtn.disabled = true; 
+                recordBtn.disabled = true; micInputBtn.disabled = true;
+                currentRoomNameSpan.textContent = "Not Joined";
+                appendSystemMessage(`Disconnected. Reason: ${escapeHtml(String(reason))}`, 'error');
+                if (isRecording) stopSpeechRecognition();
+                updateSDKStatusDisplay("awaiting_connection"); 
+            });
+            socket.on('connect_error', (error) => { 
+                console.error("CLIENT: Socket connection error:", error);
+                appendSystemMessage(`Connection failed: ${escapeHtml(error.message || String(error))}. Check server & network.`, 'error', 'sys-connect-error');
+                statusIndicator.classList.replace('bg-green-500', 'bg-red-500');
+                statusTextElem.textContent = ' Connection Failed';
+                 updateSDKStatusDisplay("awaiting_connection", "Socket connection failed.");
+            });
+            socket.on('user_joined', (data) => {
+                console.log("CLIENT: Received 'user_joined'", data);
+                appendSystemMessage(`${escapeHtml(data.user)} has joined.`);
+            });
+            socket.on('user_left', (data) => {
+                console.log("CLIENT: Received 'user_left'", data);
+                appendSystemMessage(`${escapeHtml(data.user)} has left.`);
+            });
+            
+            // ** DEBUG: Listen for ANY event from server **
+            socket.onAny((eventName, ...args) => {
+                console.warn(`CLIENT: Received ANY event: '${eventName}' with data:`, args);
+                // REMOVE THIS ALERT AFTER TESTING
+                // alert(`DEBUG: Client received event: ${eventName}`); 
+            });
+            
+            console.log("CLIENT: Attempting to register 'chat_message' handler.");
+            socket.on('chat_message', (data) => { 
+                // REMOVE THIS ALERT AFTER TESTING if it appears
+                // alert("DEBUG: Client received 'chat_message' event!"); 
+
+                console.log("CLIENT RECEIVED 'chat_message' EVENT. User:", data.user, "Primary Text:", data.text, "Original Text:", data.original_text, "Timestamp:", data.timestamp);
+                
+                if (data && data.user && data.text && data.timestamp) { // Ensure essential fields
+                    appendChatMessage(
+                        data.user,
+                        data.text, // This is the text_to_display_in_bubble from server (translated or original)
+                        data.original_text, // This is actual_original_text_for_payload from server (original if translated, else null)
+                        data.original_lang_name,
+                        data.translated_to_lang_name,
+                        data.timestamp,
+                        userNameInput.value === data.user // Check if the current user is the sender
+                    );
+                } else {
+                    console.error("Received chat_message with incomplete essential data (user, text, or timestamp):", data);
+                }
+
+                if(typingIndicatorDiv) typingIndicatorDiv.classList.add('hidden'); // Hide typing indicator
+            });
+            console.log("CLIENT: 'chat_message' handler registered.");
+
+
+            socket.on('typing', (data) => { 
+                if (userNameInput.value !== data.user) {
+                    typingUserSpan.textContent = escapeHtml(data.user);
+                    typingIndicatorDiv.classList.remove('hidden');
+                    clearTimeout(typingTimer);
+                    typingTimer = setTimeout(() => { typingIndicatorDiv.classList.add('hidden'); }, 3000);
+                }
+            });
+            socket.on('stop_typing', (data) => { if (typingUserSpan.textContent === escapeHtml(data.user)) { typingIndicatorDiv.classList.add('hidden'); } });
+        }
+        // --- END: Socket.IO Event Handlers ---
+
+        // --- START: UI Interaction Handlers (Join, Leave, Send Message, Typing, Record) ---
+        function handleJoinRoomSubmit(e) {
+            e.preventDefault();
+            const user = userNameInput.value.trim(); const room = roomNameInput.value.trim();
+            if (user && room) {
+                if (socket.connected) { 
+                    console.log(`CLIENT: Already connected. Emitting 'leave_room' for room: ${currentRoomNameSpan.textContent}, user: ${userNameInput.value}`);
+                    socket.emit('leave_room', { room: currentRoomNameSpan.textContent, user: userNameInput.value });
+                    socket.disconnect(); 
+                    console.log("CLIENT: Disconnected existing socket.");
+                }
+                // Connect after a short delay to ensure old connection is closed
+                setTimeout(() => {
+                    console.log(`CLIENT: Attempting to connect and join room: ${room}, user: ${user}`);
+                    // Set query parameters BEFORE connecting
+                    socket.io.opts.query = { user: user, room: room };
+                    socket.connect(); 
+                    // Note: 'join_room' event is now emitted from the 'connect' handler
+                    
+                    currentRoomNameSpan.textContent = escapeHtml(room);
+                    joinRoomBtn.classList.add('hidden'); leaveRoomBtn.classList.remove('hidden');
+                    chatMessagesDiv.innerHTML = ''; 
+                    appendSystemMessage(`Attempting to join room: ${escapeHtml(room)}...`, 'info');
+                }, 250);
+            } else showToast('Please enter your name and a room name.', 'warning');
+        }
+        function handleLeaveRoom() {
+            const currentRoom = currentRoomNameSpan.textContent; const currentUser = userNameInput.value;
+            if (socket.connected && currentRoom !== "Not Joined") {
+                console.log(`CLIENT: Emitting 'leave_room' for room: ${currentRoom}, user: ${currentUser}`);
+                socket.emit('leave_room', { room: currentRoom, user: currentUser }); 
+                socket.disconnect(); 
+                console.log("CLIENT: Disconnected socket on leave.");
+            }
+            joinRoomBtn.classList.remove('hidden'); leaveRoomBtn.classList.add('hidden');
+            currentRoomNameSpan.textContent = "Not Joined";
+            chatInputArea.classList.add('opacity-50', 'pointer-events-none');
+            messageInput.disabled = true; sendMessageBtn.disabled = true; 
+            recordBtn.disabled = true; micInputBtn.disabled = true;
+            if (isRecording) stopSpeechRecognition();
+            if (speechRecognizer) { try { speechRecognizer.close(); } catch(e) { console.warn("Error closing recognizer on leave:", e); } speechRecognizer = null; currentSpeechConfigProps = null; }
+            appendSystemMessage("You have left the room.", "info");
+            updateSDKStatusDisplay("awaiting_connection"); 
+        }
+        function handleMessageSubmit(e) {
+            e.preventDefault(); const messageText = messageInput.value.trim();
+            if (messageText && socket.connected) {
+                console.log(`CLIENT: Emitting 'text_message'. Text: ${messageText}, Room: ${roomNameInput.value}, User: ${userNameInput.value}, Translate To: ${translationLanguageSelect.value || null}`);
+                socket.emit('text_message', { 
+                    text: messageText, 
+                    room: roomNameInput.value, 
+                    user: userNameInput.value,
+                    translate_to: translationLanguageSelect.value || null 
+                });
+                messageInput.value = '';
+                socket.emit('stop_typing', { room: roomNameInput.value, user: userNameInput.value });
+                hasSentTypingEvent = false;
+            }
+        }
+        let hasSentTypingEvent = false; 
+        function handleTyping() {
+             if (socket.connected) {
+                if (!hasSentTypingEvent) { socket.emit('typing', { room: roomNameInput.value, user: userNameInput.value }); hasSentTypingEvent = true; }
+                clearTimeout(typingTimer);
+                typingTimer = setTimeout(() => { socket.emit('stop_typing', { room: roomNameInput.value, user: userNameInput.value }); hasSentTypingEvent = false; }, 2000);
+            }
+        }
+        function handleRecordButtonClick() {
+            if (!speechSDKLoaded || !isSpeechSDKAvailable() || !speechSubscriptionKey || !speechRecognitionRegion) { 
+                showToast("Mic unavailable: SDK not ready or credentials missing.", "error"); 
+                fetchSpeechCredentialsAndInitialize();
+                return; 
+            }
+            if (!isRecording) startSpeechRecognition(); else stopSpeechRecognition();
+        }
+        
+        function switchInputMethod(method) {
+            currentInputMethod = method;
+            textInputBtn.classList.toggle('active', method === 'text');
+            micInputBtn.classList.toggle('active', method === 'speech');
+            messageForm.classList.toggle('hidden', method !== 'text');
+            recordBtn.classList.toggle('hidden', method !== 'speech');
+            micStatusP.classList.toggle('hidden', method !== 'speech');
+            
+            if (method === 'text') {
+                messageInput.placeholder = "Type your message...";
+                if (speechRecognizer && isRecording) stopSpeechRecognition();
+            } else { 
+                if (!speechSDKLoaded || !isSpeechSDKAvailable()) {
+                    showToast("Cannot switch to speech: SDK not ready.", "warning");
+                    currentInputMethod = 'text'; return; 
+                }
+                 if (!speechSubscriptionKey || !speechRecognitionRegion){
+                    showToast("Cannot switch to speech: Credentials missing.", "warning");
+                    fetchSpeechCredentialsAndInitialize(); 
+                    currentInputMethod = 'text'; return; 
+                }
+                micStatusP.innerHTML = '<i class="fas fa-microphone-slash mr-2"></i>Click "Start Recording"';
+                recordBtn.innerHTML = '<i class="fas fa-microphone-alt mr-2"></i>Start Recording';
+                recordBtn.classList.remove('recording', 'bg-red-500', 'hover:bg-red-600');
+                recordBtn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                recordBtn.disabled = !socket.connected;
+                isRecording = false;
+            }
+        }
+        // --- END: UI Interaction Handlers ---
+
+        // --- START: Speech Recognition Logic ---
+        async function fetchSpeechCredentialsAndInitialize() {
+            console.log("fetchSpeechCredentialsAndInitialize called.");
+            if (!speechSDKLoaded || !isSpeechSDKAvailable()) {
+                updateSDKStatusDisplay("loading_script", "Cannot init mic: SDK script not yet available.");
+                return false;
+            }
+            updateSDKStatusDisplay("fetching_creds");
+            
+            const selectedLang = speechLanguageSelect.value;
+            if (speechSubscriptionKey && speechRecognitionRegion && speechRecognizer && currentSpeechConfigProps &&
+                currentSpeechConfigProps.lang === selectedLang &&
+                currentSpeechConfigProps.key === speechSubscriptionKey && 
+                currentSpeechConfigProps.region === speechRecognitionRegion) {
+                console.log("Speech recognizer already initialized with correct settings for current state.");
+                updateSDKStatusDisplay("ready"); 
+                return true;
+            }
+            
+            try {
+                const response = await fetch("{{ url_for('get_speech_token_route') }}");
+                if (!response.ok) {
+                    const errorText = await response.text(); 
+                    const errorData = JSON.parse(errorText || "{}").catch(() => ({ error: `HTTP error ${response.status}: ${errorText}` }));
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+
+                speechSubscriptionKey = data.subscription_key; 
+                speechRecognitionRegion = data.region;
+
+                if (!speechSubscriptionKey || !speechRecognitionRegion) {
+                    throw new Error("Missing speech subscription key or region from server.");
+                }
+                console.log("Speech credentials fetched successfully. Initializing recognizer...");
+                return initializeSpeechRecognizer();
+            } catch (error) {
+                console.error("Failed to fetch/process speech credentials:", error);
+                updateSDKStatusDisplay("cred_error", `Mic init error: ${error.message}`);
+                return false;
+            }
+        }
+
+        function initializeSpeechRecognizer() {
+            console.log("initializeSpeechRecognizer called.");
+            if (!speechSDKLoaded || !isSpeechSDKAvailable() || !speechSubscriptionKey || !speechRecognitionRegion) {
+                updateSDKStatusDisplay("failed", "SDK/Credentials missing for recognizer.");
+                return false; 
+            }
+            try {
+                const speechConfig = SpeechSDK.SpeechConfig.fromSubscription(speechSubscriptionKey, speechRecognitionRegion);
+                speechConfig.speechRecognitionLanguage = speechLanguageSelect.value;
+                
+                currentSpeechConfigProps = { 
+                    lang: speechLanguageSelect.value, key: speechSubscriptionKey, region: speechRecognitionRegion
+                };
+
+                const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+                if (speechRecognizer) { 
+                    try { 
+                        if(isRecording) speechRecognizer.stopContinuousRecognitionAsync();
+                        speechRecognizer.close(); 
+                    } catch (e) { console.warn("Error closing previous recognizer:", e); } 
+                    speechRecognizer = null; 
+                }
+                
+                speechRecognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+                
+                speechRecognizer.recognizing = (s, e) => { if (e.result.text && micStatusP) micStatusP.innerHTML = `<i class="fas fa-volume-up mr-2 text-blue-500 animate-pulse"></i>Recognizing: <em>${escapeHtml(e.result.text)}</em>`; };
+                speechRecognizer.recognized = (s, e) => { 
+                    if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
+                        const recognizedText = e.result.text;
+                        // Update micStatusP with ONLY the recognized text, not any translation assumptions.
+                        if (micStatusP) micStatusP.innerHTML = `<i class="fas fa-check-circle mr-2 text-green-500"></i>Recognized: <em>${escapeHtml(recognizedText)}</em>`;
+                        
+                        if (recognizedText?.trim() && socket.connected) {
+                             // Client sends 'text_message' to server with recognized speech
+                             socket.emit('text_message', { 
+                                text: recognizedText, // This is the original recognized speech
+                                room: roomNameInput.value, 
+                                user: userNameInput.value, 
+                                translate_to: translationLanguageSelect.value || null 
+                            });
+                        }
+                    } else if (e.result.reason === SpeechSDK.ResultReason.NoMatch) {
+                        if (micStatusP) micStatusP.innerHTML = `<i class="fas fa-times-circle mr-2 text-yellow-500"></i>No speech recognized. Try again.`;
+                    }
+                };
+                speechRecognizer.canceled = (s, e) => { 
+                    let errMessage = `Speech recognition canceled. Reason: ${SpeechSDK.CancellationReason[e.reason]}.`;
+                    if (e.reason === SpeechSDK.CancellationReason.Error) errMessage += ` ErrorCode=${SpeechSDK.CancellationErrorCode[e.errorCode]}, Details=${e.errorDetails}`;
+                    if (micStatusP) micStatusP.innerHTML = `<i class="fas fa-exclamation-triangle mr-2 text-red-500"></i>${escapeHtml(errMessage)}`;
+                    stopSpeechRecognition(); 
+                };
+                speechRecognizer.sessionStopped = (s, e) => { console.log("Speech session stopped."); if (isRecording) stopSpeechRecognition(); };
+                
+                updateSDKStatusDisplay("ready");
+                console.log("Speech recognizer initialized successfully with lang:", speechLanguageSelect.value);
+                return true;
+            } catch (sdkError) {
+                console.error("Error during Speech SDK recognizer setup:", sdkError);
+                updateSDKStatusDisplay("failed", `Mic setup error: ${sdkError.message || String(sdkError)}`);
+                return false;
+            }
+        }
+        async function startSpeechRecognition() {
+            if (!isRecording) {
+                const canStart = await fetchSpeechCredentialsAndInitialize();
+                if (!canStart || !speechRecognizer) {
+                    showToast("Could not start microphone. Please check settings or permissions.", "error"); return;
+                }
+                isRecording = true; 
+                recordBtn.disabled = true; recordBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Starting...';
+                speechRecognizer.startContinuousRecognitionAsync(
+                    () => { 
+                        recordBtn.innerHTML = '<i class="fas fa-stop-circle mr-2"></i>Stop Recording'; 
+                        recordBtn.classList.add('recording','bg-red-500', 'hover:bg-red-600'); 
+                        recordBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600'); 
+                        recordBtn.disabled = false; 
+                        micStatusP.innerHTML = '<i class="fas fa-microphone mr-2 text-green-500 animate-pulse"></i>Listening...'; 
+                    },
+                    (err) => { 
+                        micStatusP.innerHTML = `<i class="fas fa-exclamation-triangle mr-2 text-red-500"></i>Error starting mic: ${escapeHtml(String(err))}`; 
+                        isRecording = false; recordBtn.disabled = false; 
+                        recordBtn.innerHTML = '<i class="fas fa-microphone-alt mr-2"></i>Start Recording'; 
+                        recordBtn.classList.remove('recording', 'bg-red-500', 'hover:bg-red-600'); 
+                        recordBtn.classList.add('bg-blue-500', 'hover:bg-blue-600'); 
+                    }
+                );
+            }
+        }
+        function stopSpeechRecognition(updateButtonVisuals = true) {
+            if (speechRecognizer && isRecording) {
+                recordBtn.disabled = true;
+                speechRecognizer.stopContinuousRecognitionAsync(
+                    () => {
+                        isRecording = false; 
+                        if (updateButtonVisuals && currentInputMethod === 'speech') {
+                            recordBtn.innerHTML = '<i class="fas fa-microphone-alt mr-2"></i>Start Recording'; 
+                            recordBtn.classList.remove('recording', 'bg-red-500', 'hover:bg-red-600'); 
+                            recordBtn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                            if (micStatusP && !micStatusP.innerHTML.includes("Recognized:") && !micStatusP.innerHTML.includes("canceled")) { 
+                                micStatusP.innerHTML = '<i class="fas fa-microphone-slash mr-2"></i>Click "Start Recording"'; 
+                            }
+                        } 
+                        recordBtn.disabled = !socket.connected || !speechSDKLoaded || !speechSubscriptionKey;
+                    },
+                    (err) => {
+                        isRecording = false; 
+                        if (updateButtonVisuals && currentInputMethod === 'speech') {
+                            if (micStatusP) micStatusP.innerHTML = `<i class="fas fa-exclamation-triangle mr-2 text-red-500"></i>Error stopping mic: ${escapeHtml(String(err))}`;
+                            recordBtn.innerHTML = '<i class="fas fa-microphone-alt mr-2"></i>Start Recording'; 
+                            recordBtn.classList.remove('recording', 'bg-red-500', 'hover:bg-red-600'); 
+                            recordBtn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                        } 
+                        recordBtn.disabled = !socket.connected || !speechSDKLoaded || !speechSubscriptionKey;
+                    }
+                );
+            } else {
+                isRecording = false;
+                if (updateButtonVisuals && currentInputMethod === 'speech' && recordBtn) {
+                    recordBtn.innerHTML = '<i class="fas fa-microphone-alt mr-2"></i>Start Recording'; 
+                    recordBtn.classList.remove('recording', 'bg-red-500', 'hover:bg-red-600'); 
+                    recordBtn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                    if (micStatusP) micStatusP.innerHTML = '<i class="fas fa-microphone-slash mr-2"></i>Click "Start Recording"';
+                    recordBtn.disabled = !socket.connected || !speechSDKLoaded || !speechSubscriptionKey;
+                }
+            }
+        }
+        // --- END: Speech Recognition Logic ---
+
+        function getLangName(code) {
+            const languages = { 
+                'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian', 
+                'zh-Hans': 'Chinese (Simplified)', 'ja': 'Japanese', 'hi': 'Hindi', 'ar': 'Arabic', 
+                'ko': 'Korean', 'pt': 'Portuguese', 'ru': 'Russian',
+                // Add more mappings if your server sends different codes for speech (e.g., en-US)
+                'en-US': 'English (US)', 'es-ES': 'Spanish (Spain)', 'fr-FR': 'French (France)',
+                'de-DE': 'German (Germany)', 'it-IT': 'Italian (Italy)', 'ja-JP': 'Japanese (Japan)',
+                'ko-KR': 'Korean (Korea)', 'pt-BR': 'Portuguese (Brazil)', 'ru-RU': 'Russian (Russia)',
+                'zh-CN': 'Chinese (Mandarin, Simplified)', 'hi-IN': 'Hindi (India)', 'ar-AE': 'Arabic (UAE)'
+            };
+            return languages[code] || code; // Fallback to code if name not found
+        }
+        
+    })(); 
+</script>
+{% endblock %}

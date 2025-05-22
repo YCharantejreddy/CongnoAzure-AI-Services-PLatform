@@ -1,0 +1,34 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.dist-info/
+pip-wheel-metadata/
+venv/
+env/
+.env
+*.env.*
+
+# Instance and Uploads (these will be created inside the container or mapped to persistent storage)
+instance/
+uploads/
+
+# NLTK data (downloaded during Docker build)
+# nltk_data/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# IDE specific
+.vscode/
+.idea/
+
+# Logs and local databases (if any)
+*.log
+*.sqlite3
+*.db

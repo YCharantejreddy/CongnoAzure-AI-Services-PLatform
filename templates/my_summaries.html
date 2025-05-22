@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+
+{% block title %}My Processing History - Azure AI Mega Toolkit{% endblock %}
+
+{% block styles %}
+<style>
+    /* Custom scrollbar for modal, if needed */
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold text-blue-700">My Processing History</h1>
+    </div>
+
+    {% if summaries and summaries.items %}
+    <div class="bg-white shadow-xl rounded-lg overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                            Date & Time
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                            Input Type
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                            Action
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                            Preview / Source
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                            Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for summary_item in summaries.items %}
+                    <tr class="hover:bg-gray-50 transition-colors duration-150">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                            {{ summary_item.timestamp.strftime('%Y-%m-%d %H:%M:%S') if summary_item.timestamp else 'N/A' }} UTC
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                            {{ summary_item.input_type | default('N/A') | capitalize }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                            {{ summary_item.action_type.replace('_', ' ') | default('N/A') | title }}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-700 max-w-xs truncate" title="{{ summary_item.original_content_preview | default('') | escape }}">
+                            {{ summary_item.original_content_preview | default('N/A') | truncate(80, True) | escape }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button onclick="showSummaryDetailsModal({{ summary_item.id }})" class="text-blue-600 hover:text-blue-800 transition-colors duration-150 mr-3 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1">
+                                <i class="fas fa-eye mr-1"></i>View Details
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if summaries.pages > 1 %}
+    <nav class="mt-8 flex justify-center" aria-label="Pagination">
+        <ul class="inline-flex items-center -space-x-px">
+            {% if summaries.has_prev %}
+            <li>
+                <a href="{{ url_for('my_summaries', page=summaries.prev_num) }}"
+                   class="py-2 px-3 ml-0 leading-tight text-gray-500 bg-white rounded-l-lg border border-gray-300 hover:bg-gray-100 hover:text-gray-700">
+                    <span class="sr-only">Previous</span>
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+            </li>
+            {% else %}
+            <li>
+                <span class="py-2 px-3 ml-0 leading-tight text-gray-300 bg-white rounded-l-lg border border-gray-300 cursor-not-allowed">
+                    <span class="sr-only">Previous</span>
+                    <i class="fas fa-chevron-left"></i>
+                </span>
+            </li>
+            {% endif %}
+
+            {% for page_num in summaries.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if page_num %}
+                    {% if summaries.page == page_num %}
+                    <li>
+                        <a href="#" aria-current="page"
+                           class="py-2 px-3 leading-tight text-blue-600 bg-blue-50 border border-blue-300 hover:bg-blue-100 hover:text-blue-700 z-10">
+                            {{ page_num }}
+                        </a>
+                    </li>
+                    {% else %}
+                    <li>
+                        <a href="{{ url_for('my_summaries', page=page_num) }}"
+                           class="py-2 px-3 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700">
+                            {{ page_num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                {% else %}
+                    {% if loop.revindex0 != 0 and loop.index0 != 0 %} 
+                        <li>
+                            <span class="py-2 px-3 leading-tight text-gray-500 bg-white border border-gray-300">...</span>
+                        </li>
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+
+            {% if summaries.has_next %}
+            <li>
+                <a href="{{ url_for('my_summaries', page=summaries.next_num) }}"
+                   class="py-2 px-3 leading-tight text-gray-500 bg-white rounded-r-lg border border-gray-300 hover:bg-gray-100 hover:text-gray-700">
+                    <span class="sr-only">Next</span>
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+            {% else %}
+            <li>
+                <span class="py-2 px-3 leading-tight text-gray-300 bg-white rounded-r-lg border border-gray-300 cursor-not-allowed">
+                    <span class="sr-only">Next</span>
+                    <i class="fas fa-chevron-right"></i>
+                </span>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <div class="text-center py-12">
+        <i class="fas fa-folder-open text-6xl text-gray-400 mb-4"></i>
+        <p class="text-xl text-gray-600">You haven't processed any content yet.</p>
+        <p class="text-gray-500 mt-2">
+            Go to the <a href="{{ url_for('index') }}" class="text-blue-600 hover:underline">home page</a> to start using the AI tools.
+        </p>
+    </div>
+    {% endif %}
+</div>
+
+<div id="summaryModal" class="fixed z-[100] inset-0 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onclick="closeSummaryModal()"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl md:max-w-3xl lg:max-w-4xl sm:w-full">
+            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="sm:flex sm:items-start">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 sm:mx-0 sm:h-10 sm:w-10">
+                        <i class="fas fa-info-circle text-blue-600 text-xl"></i>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900" id="modalSummaryTitle">
+                            Processing Details
+                        </h3>
+                        <div class="mt-4 text-sm text-gray-600 space-y-4 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar" id="modalSummaryContent">
+                            <p>Loading details...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button type="button" onclick="closeSummaryModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors duration-150">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let summariesData = [];
+    // Properly parse the JSON data passed from Flask
+    // The |tojson filter ensures it's a valid JSON string, and |safe prevents auto-escaping
+    const summariesJsonString = {{ summaries_json|tojson|safe if summaries_json else '[]' }};
+    try {
+        if (typeof summariesJsonString === 'string' && summariesJsonString.length > 0) {
+            summariesData = JSON.parse(summariesJsonString);
+        } else if (Array.isArray(summariesJsonString)) { // If summaries_json was already an array (e.g. '[]')
+            summariesData = summariesJsonString;
+        }
+    } catch (e) {
+        console.error("Error parsing summaries_json:", e);
+        console.error("Received summaries_json string:", summariesJsonString); // Log the problematic string
+        summariesData = []; // Fallback to empty array
+    }
+
+    function findSummaryById(id) {
+        if (!Array.isArray(summariesData)) return null;
+        return summariesData.find(summary => summary.id === id);
+    }
+    
+    function escapeHtml(unsafe) {
+        if (typeof unsafe !== 'string') {
+            if (unsafe === null || typeof unsafe === 'undefined') return '';
+            try { return String(unsafe); } catch (e) { return ''; }
+        }
+        return unsafe
+             .replace(/&/g, "&amp;")
+             .replace(/</g, "&lt;")
+             .replace(/>/g, "&gt;")
+             .replace(/"/g, "&quot;")
+             .replace(/'/g, "&#039;");
+    }
+
+    function showSummaryDetailsModal(summaryId) {
+        const summary = findSummaryById(summaryId);
+        const modal = document.getElementById('summaryModal');
+        const modalContent = document.getElementById('modalSummaryContent');
+        const modalTitle = document.getElementById('modalSummaryTitle');
+        
+        if (!modal || !modalContent || !modalTitle) {
+            console.error("Modal elements not found in my_summaries.html");
+            return;
+        }
+
+        if (!summary) {
+            modalTitle.textContent = 'Error';
+            modalContent.innerHTML = '<p class="text-red-500">Error: Could not find summary details for ID ' + summaryId + '. Please refresh the page.</p>';
+            modal.classList.remove('hidden');
+            return;
+        }
+
+        modalTitle.textContent = `Details for Item ID: ${escapeHtml(String(summary.id))}`;
+        let html = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                <div><strong>ID:</strong> ${escapeHtml(String(summary.id))}</div>
+                <div><strong>Timestamp:</strong> ${escapeHtml(new Date(summary.timestamp).toLocaleString())}</div>
+                <div><strong>Input Type:</strong> ${escapeHtml(String(summary.input_type || '')).charAt(0).toUpperCase() + escapeHtml(String(summary.input_type || '')).slice(1)}</div>
+                <div><strong>Action Type:</strong> ${escapeHtml(String(summary.action_type || '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()))}</div>
+            </div>
+            <hr class="my-4">
+            <div>
+                <h4 class="font-semibold text-gray-800 mb-2">Original Content/Source:</h4>
+                <div class="bg-gray-100 p-3 rounded-md text-xs max-h-40 overflow-y-auto custom-scrollbar">
+                    <pre class="whitespace-pre-wrap break-all">${escapeHtml(summary.original_content_preview || 'N/A')}</pre>
+                </div>
+            </div>
+        `;
+
+        if (summary.details_json) {
+            try {
+                const detailsPretty = JSON.stringify(summary.details_json, null, 2);
+                html += `
+                    <div class="mt-4">
+                        <h4 class="font-semibold text-gray-800 mb-2">Action Parameters:</h4>
+                        <div class="bg-gray-100 p-3 rounded-md text-xs max-h-40 overflow-y-auto custom-scrollbar">
+                            <pre class="whitespace-pre-wrap break-all">${escapeHtml(detailsPretty)}</pre>
+                        </div>
+                    </div>
+                `;
+            } catch (e) {
+                 html += `<div class="mt-4"><h4 class="font-semibold text-gray-800 mb-2">Action Parameters:</h4><p class="text-red-500">Error displaying parameters.</p></div>`;
+            }
+        }
+        
+        html += `<div class="mt-4">
+                    <h4 class="font-semibold text-gray-800 mb-2">Processed Result:</h4>
+                    <div class="bg-gray-100 p-3 rounded-md text-xs max-h-60 overflow-y-auto custom-scrollbar">`;
+
+        if (summary.processed_content) {
+            const pc = summary.processed_content; 
+            if (summary.action_type === 'translate' && pc.translations) {
+                html += '<ul class="space-y-2">';
+                for (const [lang, text] of Object.entries(pc.translations)) {
+                    html += `<li><strong>${escapeHtml(getLangName(lang))}:</strong> ${escapeHtml(text)}</li>`;
+                }
+                html += '</ul>';
+            } else if (summary.action_type === 'sentiment' && pc.sentiment_analysis) {
+                const sentiment = pc.sentiment_analysis;
+                html += `<p><strong>Overall Sentiment:</strong> ${escapeHtml(sentiment.sentiment)}</p>`;
+                if (sentiment.confidence_scores) {
+                    html += `<p><strong>Confidence:</strong> Positive: ${(sentiment.confidence_scores.positive * 100).toFixed(1)}%, Neutral: ${(sentiment.confidence_scores.neutral * 100).toFixed(1)}%, Negative: ${(sentiment.confidence_scores.negative * 100).toFixed(1)}%</p>`;
+                }
+                if (sentiment.sentences && sentiment.sentences.length > 0) {
+                    html += `<h5 class="font-medium mt-3 mb-1">Sentence Analysis:</h5><ul class="list-disc pl-5 space-y-1">`;
+                    sentiment.sentences.forEach(s => { html += `<li>"${escapeHtml(s.text)}" (<em>${escapeHtml(s.sentiment)}</em>)</li>`; });
+                    html += `</ul>`;
+                }
+            } else if (summary.action_type.includes('summary') && pc.summary_data) { 
+                html += `<p class="whitespace-pre-wrap break-all">${escapeHtml(pc.summary_data.summary || pc.summary_data.text || 'No summary available.')}</p>`;
+                 if (pc.summary_data.sentences && summary.action_type === 'extractive_summary') { 
+                    html += `<h5 class="font-medium mt-2 mb-1">Key Sentences:</h5><ul class="list-disc pl-5">`;
+                    pc.summary_data.sentences.forEach(s => { html += `<li>${escapeHtml(s)}</li>`; });
+                    html += `</ul>`;
+                }
+            } else if (summary.action_type === 'transcribe_audio' && pc.transcription) { 
+                html += `<p class="whitespace-pre-wrap break-all">${escapeHtml(pc.transcription.text || 'No transcription available.')}</p>`;
+            } else if (summary.action_type === 'vision_analysis' && pc.analysis) { 
+                 html += `<pre class="whitespace-pre-wrap break-all">${escapeHtml(JSON.stringify(pc.analysis, null, 2))}</pre>`;
+            } else if (summary.action_type === 'transcript' && pc.transcript) { 
+                 html += `<p class="whitespace-pre-wrap break-all">${escapeHtml(pc.transcript.text || 'No transcript available.')}</p>`;
+                 if(pc.transcript.language) html += `<p class="text-xs italic mt-1">Language: ${escapeHtml(pc.transcript.language)}</p>`;
+            } else if (summary.action_type === 'Youtube' && pc.answer_text) { // Corrected condition for QA
+                html += `<p><strong>Question:</strong> ${escapeHtml(summary.details_json?.question || 'N/A')}</p>`;
+                html += `<p class="mt-2"><strong>Answer:</strong> ${escapeHtml(pc.answer_text)}</p>`;
+                if (pc.results && pc.results.length > 0 && pc.results[0]) {
+                    html += `<h5 class="font-medium mt-2 mb-1">Context:</h5><ul class="list-disc pl-5 text-xs">`;
+                    pc.results.forEach(c => { html += `<li>${escapeHtml(c)}</li>`; });
+                    html += `</ul>`;
+                }
+            } else { 
+                html += `<pre class="whitespace-pre-wrap break-all">${escapeHtml(JSON.stringify(pc, null, 2))}</pre>`;
+            }
+        } else {
+            html += '<p>No processed content available or an error occurred during processing.</p>';
+        }
+        html += '</div></div>';
+
+        modalContent.innerHTML = html;
+        modal.classList.remove('hidden');
+    }
+
+    function closeSummaryModal() {
+        const modal = document.getElementById('summaryModal');
+        if(modal) modal.classList.add('hidden');
+    }
+
+    function getLangName(code) {
+        const languages = { 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian', 'zh-Hans': 'Chinese (Simplified)', 'ja': 'Japanese', 'hi': 'Hindi', 'ar': 'Arabic', 'ko': 'Korean', 'pt': 'Portuguese', 'ru': 'Russian' };
+        return languages[code] || code;
+    }
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            closeSummaryModal();
+        }
+    });
+</script>
+{% endblock %}
